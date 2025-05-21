@@ -1,21 +1,74 @@
 .artist-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;
+  height: 100vh;
+  background: #fff;
+  box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+  z-index: 1000;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.close-menu {
   position: absolute;
-  background: white;
-  border: 1px solid #ccc;
-  padding: 10px;
-  z-index: 100;
-}
-
-.artist-menu ul {
-  list-style: none;
-  padding: 0;
-}
-
-.artist-menu li {
-  padding: 5px 10px;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
   cursor: pointer;
 }
 
-.artist-menu li:hover {
+.categories-container {
+  margin-top: 20px;
+}
+
+.category-section {
+  margin-bottom: 10px;
+}
+
+.category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background: #f8f8f8;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.category-header:hover {
+  background: #eee;
+}
+
+.toggle-icon {
+  font-size: 0.9rem;
+}
+
+.artists-list {
+  padding: 10px 0 10px 20px;
+}
+
+.artist-link {
+  display: block;
+  padding: 8px 15px;
+  color: #333;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.artist-link:hover {
   background: #f0f0f0;
+  color: #d23669;
+}
+
+.loading-menu,
+.error-menu {
+  padding: 20px;
+  text-align: center;
 }

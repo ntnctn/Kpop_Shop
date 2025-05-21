@@ -8,6 +8,7 @@ import Product from './pages/Product/Product';
 import Cart from './pages/Cart/Cart';
 import Profile from './pages/Profile/Profile';
 import Wishlist from './pages/Wishlist/Wishlist';
+import ArtistPage from './pages/ArtistPage/ArtistPage';
 import './App.css';
 //???
 
@@ -26,6 +27,7 @@ function App() {
         <main className="main-content">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/artist/:id" element={<ArtistPage />} />
             <Route path="/catalog" element={<Catalog />} />
             <Route path="/product/:id" element={<Product />} />
             <Route path="/cart" element={<Cart />} />

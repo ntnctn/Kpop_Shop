@@ -219,6 +219,74 @@ def get_album(album_id):
     
     return jsonify(album)
 
+# Получение артистов по категориям
+@app.route('/api/artists/<category>', methods=['GET'])
+def get_artists_by_category(category):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    valid_categories = ['female_group', 'male_group', 'solo']
+    if category not in valid_categories:
+        return jsonify({'error': 'Invalid category'}), 400
+    
+    cur.execute('SELECT * FROM artists WHERE category = %s', (category,))
+    artists = cur.fetchall()
+    
+    cur.close()
+    conn.close()
+    return jsonify(artists)
+
+# Получение всех категорий
+@app.route('/api/artist_categories', methods=['GET'])
+def get_artist_categories():
+    return jsonify([
+        {'id': 'female_group', 'name': 'Женские группы'},
+        {'id': 'male_group', 'name': 'Мужские группы'},
+        {'id': 'solo', 'name': 'Сольные исполнители'}
+    ])
+
+
+# Получение информации об исполнителе и его альбомах
+@app.route('/api/artists/<int:artist_id>', methods=['GET'])
+def get_artist(artist_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Получаем информацию об исполнителе
+        cur.execute('SELECT * FROM artists WHERE id = %s', (artist_id,))
+        artist = cur.fetchone()
+        
+        if not artist:
+            return jsonify({'error': 'Artist not found'}), 404
+            
+        # Получаем альбомы исполнителя
+        cur.execute('''
+            SELECT * FROM albums 
+            WHERE artist_id = %s
+            ORDER BY release_date DESC
+        ''', (artist_id,))
+        albums = cur.fetchall()
+        
+        # Добавляем информацию о версиях для каждого альбома
+        for album in albums:
+            cur.execute('''
+                SELECT * FROM album_versions
+                WHERE album_id = %s
+            ''', (album['id'],))
+            album['versions'] = cur.fetchall()
+        
+        return jsonify({
+            'artist': artist,
+            'albums': albums
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 # Protected routes
 @app.route('/api/cart', methods=['GET', 'POST'])
 @login_required

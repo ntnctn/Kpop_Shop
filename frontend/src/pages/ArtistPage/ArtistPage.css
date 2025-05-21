@@ -1,0 +1,40 @@
+.artist-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.artist-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.artist-category {
+  color: #666;
+  font-style: italic;
+}
+
+.artist-image img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.albums-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+  margin-top: 30px;
+}
+
+.album-card {
+  border: 1px solid #eee;
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.loading, .error {
+  text-align: center;
+  padding: 50px;
+  font-size: 1.2rem;
+}
