@@ -1,0 +1,21 @@
+.artist-menu {
+  position: absolute;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 10px;
+  z-index: 100;
+}
+
+.artist-menu ul {
+  list-style: none;
+  padding: 0;
+}
+
+.artist-menu li {
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.artist-menu li:hover {
+  background: #f0f0f0;
+}
