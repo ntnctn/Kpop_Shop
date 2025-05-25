@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request
-from flask_cors import CORS  # поддержка cors
+from flask_cors import CORS
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -41,7 +41,6 @@ def login_required(f):
         if not user:
             return jsonify({'message': 'User not found!'}), 404
             
-        # Прямое сравнение паролей (без хеширования)
         if user['password_hash'] != auth.password:
             return jsonify({'message': 'Wrong password!'}), 401
             
@@ -49,56 +48,224 @@ def login_required(f):
         
     return decorated
 
-# Регистрация (без хеширования)
+# Регистрация
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
+    if not data or 'email' not in data or 'password' not in data:
+        return jsonify({'message': 'Email and password are required!'}), 400
     
     conn = get_db_connection()
     cur = conn.cursor()
     
     try:
+        cur.execute("SELECT id FROM users WHERE email = %s", (data['email'],))
+        if cur.fetchone():
+            return jsonify({'message': 'Email already exists!'}), 400
+        
         cur.execute(
-            "INSERT INTO users (email, password_hash, first_name, last_name) VALUES (%s, %s, %s, %s) RETURNING id",
-            (data['email'], data['password'], data.get('first_name'), data.get('last_name')))
+            "INSERT INTO users (email, password_hash, first_name, last_name, is_admin) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (data['email'], data['password'], data.get('first_name'), data.get('last_name'), False)
+        )
         user_id = cur.fetchone()[0]
         conn.commit()
-    except psycopg2.IntegrityError:
+        
+        # Создаем корзину для нового пользователя
+        cur.execute("INSERT INTO cart (user_id) VALUES (%s) RETURNING id", (user_id,))
+        cart_id = cur.fetchone()[0]
+        conn.commit()
+        
+        return jsonify({
+            'message': 'User created successfully!',
+            'user_id': user_id,
+            'cart_id': cart_id
+        }), 201
+    except Exception as e:
         conn.rollback()
-        return jsonify({'message': 'Email already exists!'}), 400
+        return jsonify({'message': str(e)}), 500
     finally:
         cur.close()
         conn.close()
-    
-    return jsonify({'message': 'User created successfully!', 'user_id': user_id}), 201
 
-# Вход (без хеширования)
+# Вход
 @app.route('/api/login', methods=['GET'])
 def login():
     auth = request.authorization
-    
     if not auth:
-        return jsonify({'message': 'Credentials required!'}), 401
+        return jsonify({'message': 'Authorization required!'}), 401
     
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute('SELECT * FROM users WHERE email = %s', (auth.username,))
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
     
-    if not user:
-        return jsonify({'message': 'User not found!'}), 404
+    try:
+        cur.execute("SELECT * FROM users WHERE email = %s", (auth.username,))
+        user = cur.fetchone()
+        
+        if not user:
+            return jsonify({'message': 'User not found!'}), 404
+            
+        if user['password_hash'] != auth.password:
+            return jsonify({'message': 'Wrong password!'}), 401
+            
+        # Получаем корзину пользователя
+        cur.execute("SELECT id FROM cart WHERE user_id = %s", (user['id'],))
+        cart = cur.fetchone()
+        
+        return jsonify({
+            'message': 'Login successful',
+            'user_id': user['id'],
+            'email': user['email'],
+            'is_admin': user['is_admin'],
+            'cart_id': cart['id'] if cart else None
+        })
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# Корзина (только для авторизованных)
+@app.route('/api/cart', methods=['GET', 'POST'])
+@login_required
+def cart_operations(user):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    # Прямое сравнение паролей
-    if user['password_hash'] != auth.password:
-        return jsonify({'message': 'Wrong password!'}), 401
+    if request.method == 'GET':
+        try:
+            cur.execute('''
+                SELECT ci.id, ci.quantity, 
+                       av.id as version_id, av.version_name,
+                       a.id as album_id, a.title as album_title, 
+                       a.base_price + av.price_diff as price,
+                       a.main_image_url
+                FROM cart_items ci
+                JOIN album_versions av ON ci.album_version_id = av.id
+                JOIN albums a ON av.album_id = a.id
+                JOIN cart c ON ci.cart_id = c.id
+                WHERE c.user_id = %s
+            ''', (user['id'],))
+            items = cur.fetchall()
+            
+            total = sum(item['price'] * item['quantity'] for item in items)
+            
+            return jsonify({
+                'items': items,
+                'total': total,
+                'cart_id': items[0]['cart_id'] if items else None
+            })
+        except Exception as e:
+            return jsonify({'message': str(e)}), 500
+        finally:
+            cur.close()
+            conn.close()
     
-    return jsonify({
-        'message': 'Login successful!',
-        'user_id': user['id'],
-        'is_admin': user['is_admin']
-    })
+    elif request.method == 'POST':
+        data = request.get_json()
+        if not data or 'version_id' not in data:
+            return jsonify({'message': 'Version ID is required!'}), 400
+        
+        try:
+            # Получаем или создаем корзину
+            cur.execute('SELECT id FROM cart WHERE user_id = %s', (user['id'],))
+            cart = cur.fetchone()
+            
+            if not cart:
+                cur.execute('INSERT INTO cart (user_id) VALUES (%s) RETURNING id', (user['id'],))
+                cart_id = cur.fetchone()[0]
+            else:
+                cart_id = cart['id']
+            
+            # Добавляем товар в корзину
+            cur.execute('''
+                INSERT INTO cart_items (cart_id, album_version_id, quantity)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (cart_id, album_version_id) 
+                DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity
+                RETURNING id
+            ''', (cart_id, data['version_id'], data.get('quantity', 1)))
+            
+            conn.commit()
+            return jsonify({'message': 'Item added to cart!'})
+        except Exception as e:
+            conn.rollback()
+            return jsonify({'message': str(e)}), 400
+        finally:
+            cur.close()
+            conn.close()
+
+# Избранное (только для авторизованных)
+@app.route('/api/wishlist', methods=['GET', 'POST', 'DELETE'])
+@login_required
+def wishlist_operations(user):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    if request.method == 'GET':
+        try:
+            cur.execute('''
+                SELECT w.id, a.id as album_id, a.title, a.main_image_url, a.base_price
+                FROM wishlist w
+                JOIN albums a ON w.album_id = a.id
+                WHERE w.user_id = %s
+            ''', (user['id'],))
+            items = cur.fetchall()
+            
+            return jsonify(items)
+        except Exception as e:
+            return jsonify({'message': str(e)}), 500
+        finally:
+            cur.close()
+            conn.close()
+    
+    elif request.method == 'POST':
+        data = request.get_json()
+        if not data or 'album_id' not in data:
+            return jsonify({'message': 'Album ID is required!'}), 400
+        
+        try:
+            cur.execute('''
+                INSERT INTO wishlist (user_id, album_id)
+                VALUES (%s, %s)
+                ON CONFLICT (user_id, album_id) DO NOTHING
+                RETURNING id
+            ''', (user['id'], data['album_id']))
+            
+            if cur.rowcount == 0:
+                return jsonify({'message': 'Album already in wishlist!'}), 400
+                
+            conn.commit()
+            return jsonify({'message': 'Album added to wishlist!'})
+        except Exception as e:
+            conn.rollback()
+            return jsonify({'message': str(e)}), 400
+        finally:
+            cur.close()
+            conn.close()
+    
+    elif request.method == 'DELETE':
+        album_id = request.args.get('album_id')
+        if not album_id:
+            return jsonify({'message': 'Album ID is required!'}), 400
+        
+        try:
+            cur.execute('''
+                DELETE FROM wishlist 
+                WHERE user_id = %s AND album_id = %s
+                RETURNING id
+            ''', (user['id'], album_id))
+            
+            if cur.rowcount == 0:
+                return jsonify({'message': 'Album not found in wishlist!'}), 404
+                
+            conn.commit()
+            return jsonify({'message': 'Album removed from wishlist!'})
+        except Exception as e:
+            conn.rollback()
+            return jsonify({'message': str(e)}), 400
+        finally:
+            cur.close()
+            conn.close()
 
 def admin_required(f):
     @wraps(f)
@@ -262,9 +429,11 @@ def get_artist(artist_id):
             
         # Получаем альбомы исполнителя
         cur.execute('''
-            SELECT * FROM albums 
-            WHERE artist_id = %s
-            ORDER BY release_date DESC
+            SELECT a.*, ar.name as artist_name, ar.image_url as artist_image
+            FROM albums a
+            JOIN artists ar ON a.artist_id = ar.id
+            WHERE a.artist_id = %s
+            ORDER BY a.release_date DESC
         ''', (artist_id,))
         albums = cur.fetchall()
         
@@ -287,73 +456,6 @@ def get_artist(artist_id):
         cur.close()
         conn.close()
 
-# Protected routes
-@app.route('/api/cart', methods=['GET', 'POST'])
-@login_required
-def cart_operations(user):
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    
-    if request.method == 'GET':
-        # Get or create cart
-        cur.execute('SELECT id FROM cart WHERE user_id = %s', (user['id'],))
-        cart = cur.fetchone()
-        
-        if not cart:
-            return jsonify({'items': [], 'total': 0})
-        
-        # Get cart items
-        cur.execute('''
-            SELECT ci.id, ci.quantity, 
-                   av.id as version_id, av.version_name,
-                   a.id as album_id, a.title as album_title, 
-                   a.base_price + av.price_diff as price,
-                   a.main_image_url
-            FROM cart_items ci
-            JOIN album_versions av ON ci.album_version_id = av.id
-            JOIN albums a ON av.album_id = a.id
-            WHERE ci.cart_id = %s
-        ''', (cart['id'],))
-        items = cur.fetchall()
-        
-        # Calculate total
-        total = sum(item['price'] * item['quantity'] for item in items)
-        
-        cur.close()
-        conn.close()
-        
-        return jsonify({'items': items, 'total': total})
-    
-    elif request.method == 'POST':
-        data = request.get_json()
-        
-        try:
-            # Get or create cart
-            cur.execute('SELECT id FROM cart WHERE user_id = %s', (user['id'],))
-            cart = cur.fetchone()
-            
-            if not cart:
-                cur.execute('INSERT INTO cart (user_id) VALUES (%s) RETURNING id', (user['id'],))
-                cart_id = cur.fetchone()[0]
-            else:
-                cart_id = cart['id']
-            
-            # Add item to cart
-            cur.execute('''
-                INSERT INTO cart_items (cart_id, album_version_id, quantity)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (cart_id, album_version_id) 
-                DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity
-            ''', (cart_id, data['version_id'], data.get('quantity', 1)))
-            
-            conn.commit()
-            return jsonify({'message': 'Item added to cart!'})
-        except Exception as e:
-            conn.rollback()
-            return jsonify({'message': str(e)}), 400
-        finally:
-            cur.close()
-            conn.close()
 
 
 if __name__ == '__main__':

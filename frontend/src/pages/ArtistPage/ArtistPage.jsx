@@ -12,7 +12,7 @@ const ArtistPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await api.getArtistWithAlbums(id);
+        const response = await api.getArtist(id);
         setData(response.data);
       } catch (err) {
         setError(err.message);
@@ -25,7 +25,7 @@ const ArtistPage = () => {
 
   if (loading) return <div className="loading">Загрузка...</div>;
   if (error) return <div className="error">Ошибка: {error}</div>;
-  if (!data?.artist) return <div className="error">Исполнитель не найден</div>;
+  if (!data) return <div className="error">Исполнитель не найден</div>;
 
   const { artist, albums } = data;
 
@@ -54,7 +54,7 @@ const ArtistPage = () => {
       </div>
 
       <h2>Альбомы</h2>
-      {albums.length > 0 ? (
+      {albums && albums.length > 0 ? (
         <div className="albums-grid">
           {albums.map(album => (
             <div key={album.id} className="album-card">
@@ -65,11 +65,6 @@ const ArtistPage = () => {
                 />
                 <h3>{album.title}</h3>
                 <p>{new Date(album.release_date).toLocaleDateString()}</p>
-                {album.versions?.length > 0 && (
-                  <p className="versions-count">
-                    {album.versions.length} версий
-                  </p>
-                )}
               </Link>
             </div>
           ))}

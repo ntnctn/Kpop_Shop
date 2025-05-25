@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; // Добавлен useEffect
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api';
 import './ArtistMenu.css';
@@ -10,7 +10,6 @@ const ArtistMenu = ({ onClose }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Загрузка категорий при монтировании
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -27,7 +26,6 @@ const ArtistMenu = ({ onClose }) => {
     fetchCategories();
   }, []);
 
-  // Загрузка артистов при раскрытии категории
   const loadArtists = async (categoryId) => {
     if (!artists[categoryId]) {
       try {
@@ -37,7 +35,11 @@ const ArtistMenu = ({ onClose }) => {
           [categoryId]: response.data
         }));
       } catch (err) {
-        console.error('Error fetching artists:', err);
+        console.error(`Error fetching artists for category ${categoryId}:`, err);
+        setArtists(prev => ({
+          ...prev,
+          [categoryId]: [] // Устанавливаем пустой массив в случае ошибки
+        }));
       }
     }
   };
@@ -52,7 +54,7 @@ const ArtistMenu = ({ onClose }) => {
   };
 
   if (loading) return <div className="loading-menu">Загрузка...</div>;
-  if (error) return <div className="error-menu">Ошибка загрузки</div>;
+  if (error) return <div className="error-menu">Ошибка загрузки: {error}</div>;
 
   return (
     <div className="artist-menu">
@@ -74,16 +76,20 @@ const ArtistMenu = ({ onClose }) => {
             
             {expandedCategory === category.id && (
               <div className="artists-list">
-                {artists[category.id]?.map(artist => (
-                  <Link
-                    key={artist.id}
-                    to={`/artist/${artist.id}`}
-                    className="artist-link"
-                    onClick={onClose}
-                  >
-                    {artist.name}
-                  </Link>
-                ))}
+                {artists[category.id]?.length > 0 ? (
+                  artists[category.id].map(artist => (
+                    <Link
+                      key={artist.id}
+                      to={`/artist/${artist.id}`}
+                      className="artist-link"
+                      onClick={onClose}
+                    >
+                      {artist.name}
+                    </Link>
+                  ))
+                ) : (
+                  <div className="no-artists">Нет артистов в этой категории</div>
+                )}
               </div>
             )}
           </div>

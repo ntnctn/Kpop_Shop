@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import ArtistMenu from '../ArtistMenu/ArtistMenu';
 import './Navbar.css';
 
-const Navbar = ({ onAuthClick }) => {
+const Navbar = ({ currentUser, onAuthClick, onLogout }) => {
   const [isMenuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -24,9 +24,17 @@ const Navbar = ({ onAuthClick }) => {
       
       <div className="navbar-right">
         <button className="search-button">🔍</button>
-        <button className="auth-button" onClick={onAuthClick}>👤</button>
-        <Link to="/wishlist" className="wishlist-button">❤️</Link>
-        <Link to="/cart" className="cart-button">🛒</Link>
+        
+        {currentUser ? (
+          <>
+            <Link to="/wishlist" className="wishlist-button">❤️</Link>
+            <Link to="/cart" className="cart-button">🛒</Link>
+            <Link to="/profile" className="profile-button">👤</Link>
+            <button className="logout-button" onClick={onLogout}>🚪</button>
+          </>
+        ) : (
+          <button className="auth-button" onClick={onAuthClick}>👤</button>
+        )}
       </div>
     </nav>
   );
