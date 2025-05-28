@@ -23,17 +23,50 @@ const Navbar = ({ currentUser, onAuthClick, onLogout }) => {
       </div>
       
       <div className="navbar-right">
-        <button className="search-button">🔍</button>
-        
         {currentUser ? (
           <>
-            <Link to="/wishlist" className="wishlist-button">❤️</Link>
-            <Link to="/cart" className="cart-button">🛒</Link>
-            <Link to="/profile" className="profile-button">👤</Link>
-            <button className="logout-button" onClick={onLogout}>🚪</button>
+            {currentUser.isAdmin && (
+              <Link 
+                to="/admin" 
+                className="admin-link"
+                style={{ 
+                  color: 'white',
+                  textDecoration: 'none',
+                  marginRight: '20px',
+                  fontWeight: '500'
+                }}
+              >
+                Админ-панель
+              </Link>
+            )}
+            <button 
+              className="logout-button" 
+              onClick={onLogout}
+              style={{ 
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                fontSize: '1.4rem',
+                cursor: 'pointer'
+              }}
+            >
+              Выйти
+            </button>
           </>
         ) : (
-          <button className="auth-button" onClick={onAuthClick}>👤</button>
+          <button 
+            className="auth-button" 
+            onClick={onAuthClick}
+            style={{ 
+              background: 'none',
+              border: 'none',
+              color: 'white',
+              fontSize: '1.4rem',
+              cursor: 'pointer'
+            }}
+          >
+            Войти
+          </button>
         )}
       </div>
     </nav>

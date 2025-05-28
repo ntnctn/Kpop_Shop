@@ -19,7 +19,6 @@ const Catalog = () => {
         setLoading(false);
       }
     };
-
     fetchAlbums();
   }, []);
 
@@ -32,14 +31,10 @@ const Catalog = () => {
       <div className="album-grid">
         {albums.map(album => (
           <div key={album.id} className="album-card">
-            <Link to={`/product/${album.id}`}>
-              <img 
-                src={album.main_image_url || '/placeholder-album.jpg'} 
-                alt={album.title}
-              />
+            <Link to={`/album/${album.id}`}>
               <h3>{album.title}</h3>
-              <p>{album.artist}</p>
-              <p>${album.base_price}</p>
+              <p>Исполнитель: {album.artist}</p>
+              <p>Цена: ${album.base_price}</p>
             </Link>
           </div>
         ))}

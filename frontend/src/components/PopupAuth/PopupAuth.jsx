@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import api from '../../api';  
+import api from '../../api';
 import './PopupAuth.css';
 import PropTypes from 'prop-types';
 
@@ -8,42 +8,29 @@ const PopupAuth = ({ onClose, onLogin }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
-  const [firstName, setFirstName] = useState(''); // Изменил username на firstName
-  const [lastName, setLastName] = useState(''); // Добавил поле для фамилии
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
-    try {
-      const response = await api.login(email, password);
-      // Сервер возвращает данные напрямую, а не в response.data
-      onLogin({
-        id: response.user_id,
-        email: response.email,
-        isAdmin: response.is_admin || false
-      });
-      onClose();
-    } catch (err) {
-      setError(err.message || 'Неверный email или пароль');
-    }
-  };
+ const handleAuth = async (e, isRegistration) => {
+  e.preventDefault();
+  setError('');
 
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    setError('');
-    try {
-      const response = await api.register({ 
-        email, 
-        password, 
-        first_name: firstName, // Используем first_name вместо username
-        last_name: lastName 
-      });
+  try {
+    if (isRegistration) {
+      await api.register(email, password, firstName, lastName);
       // После регистрации автоматически входим
-      await handleLogin(e);
-    } catch (err) {
-      setError(err.message || 'Ошибка регистрации');
+      const loginResponse = await api.login(email, password);
+      onLogin(loginResponse); // Передаем полный ответ
+    } else {
+      const loginResponse = await api.login(email, password);
+      onLogin(loginResponse); // Передаем полный ответ
     }
-  };
+    
+    onClose();
+  } catch (err) {
+    setError(err.message || 'Ошибка авторизации');
+  }
+};
 
   const toggleAuthMode = () => {
     setIsRegistering(!isRegistering);
@@ -58,7 +45,7 @@ const PopupAuth = ({ onClose, onLogin }) => {
         
         {error && <p className="error-message">{error}</p>}
 
-        <form onSubmit={isRegistering ? handleRegister : handleLogin}>
+        <form onSubmit={(e) => handleAuth(e, isRegistering)}>
           {isRegistering && (
             <>
               <div className="form-group">
@@ -122,9 +109,9 @@ const PopupAuth = ({ onClose, onLogin }) => {
   );
 };
 
-
 PopupAuth.propTypes = {
   onClose: PropTypes.func.isRequired,
-  onLogin: PropTypes.func // Не required, если может быть undefined
+  onLogin: PropTypes.func.isRequired
 };
+
 export default PopupAuth;

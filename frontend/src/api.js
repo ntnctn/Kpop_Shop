@@ -1,30 +1,60 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
 
 const apiInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 5000,
+  timeout: 10000,
+  withCredentials: true
 });
 
-// Добавляем все необходимые методы
+
+// Добавьте в начало api.js
+try {
+  localStorage.setItem('test', 'test');
+  localStorage.removeItem('test');
+} catch (e) {
+  console.error('LocalStorage blocked:', e);
+}
+
+
+// Обработчик запросов
+apiInstance.interceptors.request.use(config => {
+  // Для OPTIONS запросов не добавляем заголовки
+  if (config.method.toUpperCase() !== 'OPTIONS') {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    config.headers['Content-Type'] = 'application/json';
+  }
+  return config;
+});
+
+
+// Обработчик ответов
+// apiInstance.interceptors.response.use(
+//   response => response,
+//   error => {
+//     if (error.response?.status === 401) {
+//       localStorage.removeItem('token');
+//       localStorage.removeItem('userData');
+//     }
+//     return Promise.reject(error);
+//   }
+// );
+
 export default {
-  // Альбомы
   getAlbums() {
     return apiInstance.get('/albums');
   },
-  
+
   getAlbum(id) {
     return apiInstance.get(`/albums/${id}`);
   },
 
-  // Артисты
   getArtist(id) {
     return apiInstance.get(`/artists/${id}`);
-  },
-
-  getArtistWithAlbums(artistId) {
-    return apiInstance.get(`/artists/${artistId}/albums`);
   },
 
   getArtistsByCategory(category) {
@@ -35,54 +65,43 @@ export default {
     return apiInstance.get('/artist_categories');
   },
 
-  // Авторизация
-  register: async (email, password, firstName, lastName) => {
+  // Изменяем функцию регистрации
+// Исправляем запрос регистрации
+register: async (email, password, firstName, lastName) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/register`, {
+      // Сначала отправляем OPTIONS запрос
+      await apiInstance.options('/register');
+      
+      // Затем основной POST запрос
+      const response = await apiInstance.post('/register', {
         email,
         password,
-        first_name: firstName,
-        last_name: lastName
+        firstName,
+        lastName
       });
       return response.data;
     } catch (error) {
-      throw error.response?.data || { message: 'Registration failed' };
+      console.error('Registration error:', error);
+      throw new Error(error.response?.data?.message || 'Registration failed');
     }
   },
-
-  login: async (email, password) => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/login`, {
-        auth: {
-          username: email.trim(),
-          password: password.trim()
-        }
-      });
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || { message: 'Login failed' };
-    }
-  },
-
-  // Корзина
-  getCart() {
-    return apiInstance.get('/cart');
-  },
-
-  addToCart(versionId, quantity = 1) {
-    return apiInstance.post('/cart', { version_id: versionId, quantity });
-  },
-
-  // Избранное
-  getWishlist() {
-    return apiInstance.get('/wishlist');
-  },
-
-  addToWishlist(albumId) {
-    return apiInstance.post('/wishlist', { album_id: albumId });
-  },
-
-  removeFromWishlist(albumId) {
-    return apiInstance.delete(`/wishlist/${albumId}`);
+  
+  // Аналогично для login
+login: async (email, password) => {
+  try {
+    const response = await apiInstance.post('/login', { email, password });
+    console.log("Full login response:", response.data); // Для отладки
+    
+    // Возвращаем весь объект ответа
+    return response.data;
+  } catch (error) {
+    console.error('Login request error:', error);
+    throw error;
+  }
+},
+  
+  logout: () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userData');
   }
 };

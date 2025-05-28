@@ -5,51 +5,70 @@ import PopupAuth from './components/PopupAuth/PopupAuth';
 import Home from './pages/Home/Home';
 import Catalog from './pages/Catalog/Catalog';
 import Product from './pages/Product/Product';
-import Cart from './pages/Cart/Cart';
-import Profile from './pages/Profile/Profile';
-import Wishlist from './pages/Wishlist/Wishlist';
+import AdminPanel from './pages/AdminPanel/AdminPanel';
 import ArtistPage from './pages/ArtistPage/ArtistPage';
+import apiInstance from './api';
 import './App.css';
 
 function App() {
-  const [isAuthPopupOpen, setAuthPopupOpen] = useState(false);
+const [isAuthPopupOpen, setAuthPopupOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
 
+  // Инициализация пользователя при загрузке
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      // Проверка токена и загрузка данных пользователя
-      // В реальном приложении здесь должен быть запрос к API
+    const initializeAuth = async () => {
+      const token = localStorage.getItem('token');
       const userData = JSON.parse(localStorage.getItem('userData'));
-      if (userData) setCurrentUser(userData);
-    }
+      
+      if (token && userData) {
+        // Проверка валидности токена
+        try {
+          await apiInstance.get('/api/validate-token'); // Добавьте этот эндпоинт на сервере
+          setCurrentUser(userData);
+        } catch (error) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('userData');
+        }
+      }
+    };
+    initializeAuth();
   }, []);
 
-  const handleLogin = (userData) => {
-    setCurrentUser(userData);
-    setAuthPopupOpen(false);
-    localStorage.setItem('token', 'dummy-token');
-    localStorage.setItem('userData', JSON.stringify(userData));
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
+  const handleLogin = async (responseData) => {
+  try {
+    console.log('Raw response data:', responseData); // Добавьте это для отладки
+    
+    // Проверяем новую структуру ответа
+    if (responseData.accessToken && responseData.user) {
+      const { accessToken, user } = responseData;
+      
+      localStorage.setItem('token', accessToken);
+      localStorage.setItem('userData', JSON.stringify(user));
+      setCurrentUser(user);
+      setAuthPopupOpen(false);
+      return;
+    }
+    
+  } catch (error) {
+    console.error('Login error:', error);
     localStorage.removeItem('token');
     localStorage.removeItem('userData');
-  };
+    setCurrentUser(null);
+    throw error; // Пробрасываем ошибку выше
+  }
+};
 
-  const ProtectedRoute = ({ children }) => {
-    if (!currentUser) {
-      setAuthPopupOpen(true);
-      return <Navigate to="/" />;
-    }
-    return children;
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userData');
+    setCurrentUser(null);
+    window.location.reload();
   };
 
   return (
     <Router>
       <div className="app">
-        <Navbar 
+        <Navbar
           currentUser={currentUser}
           onAuthClick={() => setAuthPopupOpen(true)}
           onLogout={handleLogout}
@@ -67,25 +86,13 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/artist/:id" element={<ArtistPage />} />
             <Route path="/catalog" element={<Catalog />} />
+            <Route
+              path="/admin"
+              element={
+                currentUser?.isAdmin ? <AdminPanel /> : <Navigate to="/" />
+              }
+            />
             <Route path="/album/:id" element={<Product />} />
-            
-            <Route path="/cart" element={
-              <ProtectedRoute>
-                <Cart />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/profile" element={
-              <ProtectedRoute>
-                <Profile user={currentUser} />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/wishlist" element={
-              <ProtectedRoute>
-                <Wishlist />
-              </ProtectedRoute>
-            } />
           </Routes>
         </main>
       </div>
