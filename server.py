@@ -571,6 +571,148 @@ def admin_albums():
         cur.close()
         conn.close()
         
+# Изменение артистов
+
+@app.route('/api/admin/artists/<int:id>', methods=['GET', 'PUT'])
+@jwt_required()
+@admin_required
+def admin_artist(id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        if request.method == 'GET':
+            cur.execute('SELECT * FROM artists WHERE id = %s', (id,))
+            artist = cur.fetchone()
+            if not artist:
+                return jsonify({'message': 'Artist not found'}), 404
+            return jsonify(artist)
+            
+        elif request.method == 'PUT':
+            data = request.get_json()
+            if not data or 'name' not in data or 'category' not in data:
+                return jsonify({'message': 'Name and category are required!'}), 400
+            
+            cur.execute(
+                "UPDATE artists SET name = %s, category = %s, description = %s, image_url = %s "
+                "WHERE id = %s RETURNING *",
+                (data['name'], data['category'], data.get('description'), data.get('image_url'), id)
+            )
+            updated_artist = cur.fetchone()
+            conn.commit()
+            
+            if not updated_artist:
+                return jsonify({'message': 'Artist not found'}), 404
+                
+            return jsonify(updated_artist)
+            
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Admin artist error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# Изменение альбомов
+
+@app.route('/api/admin/albums/<int:id>', methods=['GET', 'PUT'])
+@jwt_required()
+@admin_required
+def admin_album(id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        if request.method == 'GET':
+            cur.execute('''
+                SELECT a.*, ar.name as artist_name 
+                FROM albums a
+                JOIN artists ar ON a.artist_id = ar.id
+                WHERE a.id = %s
+            ''', (id,))
+            album = cur.fetchone()
+            
+            if not album:
+                return jsonify({'message': 'Album not found'}), 404
+                
+            cur.execute('SELECT * FROM album_versions WHERE album_id = %s', (id,))
+            album['versions'] = cur.fetchall()
+            
+            return jsonify(album)
+            
+        elif request.method == 'PUT':
+            data = request.get_json()
+            
+            # Валидация обязательных полей
+            if not data or 'artist_id' not in data or 'title' not in data or 'base_price' not in data:
+                return jsonify({'message': 'Missing required fields'}), 400
+                
+            # Обновление альбома
+            cur.execute('''
+                UPDATE albums SET
+                    artist_id = %s, 
+                    title = %s, 
+                    base_price = %s, 
+                    description = %s, 
+                    release_date = %s, 
+                    status = %s, 
+                    main_image_url = %s, 
+                    is_preorder = %s
+                WHERE id = %s
+                RETURNING *
+            ''', (
+                data['artist_id'], 
+                data['title'], 
+                data['base_price'], 
+                data.get('description', ''),
+                data.get('release_date'), 
+                data.get('status', 'in_stock'),
+                data.get('main_image_url', ''), 
+                data.get('is_preorder', False),
+                id
+            ))
+            updated_album = cur.fetchone()
+            
+            if not updated_album:
+                return jsonify({'message': 'Album not found'}), 404
+                
+            # Удаляем старые версии и добавляем новые
+            cur.execute('DELETE FROM album_versions WHERE album_id = %s', (id,))
+            
+            for version in data.get('versions', []):
+                cur.execute('''
+                    INSERT INTO album_versions (
+                        album_id, version_name, price_diff, packaging_details,
+                        stock_quantity, is_limited
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                ''', (
+                    id,
+                    version.get('version_name', ''),
+                    float(version.get('price_diff', 0)),
+                    version.get('packaging_details', ''),
+                    int(version.get('stock_quantity', 0)),
+                    bool(version.get('is_limited', False))
+                ))
+            
+            conn.commit()
+            
+            # Возвращаем обновленный альбом
+            cur.execute('SELECT * FROM album_versions WHERE album_id = %s', (id,))
+            updated_album['versions'] = cur.fetchall()
+            
+            return jsonify(updated_album)
+            
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Admin album error: {str(e)}", exc_info=True)
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
         
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,42 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Tab, Tabs, Box, Button, CircularProgress
+  Box, Button, CircularProgress, Paper, List, ListItem,
+  ListItemButton, ListItemText, Toolbar, Typography
 } from '@mui/material';
-
-import AddIcon from '@mui/icons-material/Close';
+import { DataGrid } from '@mui/x-data-grid';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 import api from '../../api';
 import { Modal } from '../../components/Modal/Modal';
 import { AlbumForm } from '../../components/AlbumForm/AlbumForm';
 import { ArtistForm } from '../../components/ArtistForm/ArtistForm';
+import { formatDateForInput, formatDateForServer } from '../../utils/dateFormatter';
 import './AdminPanel.css';
 
-
-
 const AdminPanel = () => {
-  const [tabValue, setTabValue] = useState(0);
+  const [tabValue, setTabValue] = useState('albums');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Состояния для артистов
+  // Состояния для данных
   const [artists, setArtists] = useState([]);
-
-  
-   const [isAlbumModalOpen, setIsAlbumModalOpen] = useState(false);
-   const [isArtistModalOpen, setIsArtistModalOpen] = useState(false);
-
-  // Состояния для альбомов
   const [albums, setAlbums] = useState([]);
+  const [isAlbumModalOpen, setIsAlbumModalOpen] = useState(false);
+  const [isArtistModalOpen, setIsArtistModalOpen] = useState(false);
 
+  // Состояния для редактирования
+  const [editingArtist, setEditingArtist] = useState(null);
+  const [editingAlbum, setEditingAlbum] = useState(null);
 
   // Загрузка данных
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // setError(null);
-
-        // Загружаем артистов и альбомы параллельно
         const authCheck = await api.checkAuth();
         if (!authCheck.data.is_admin) {
           throw new Error('You do not have admin privileges');
@@ -47,14 +45,13 @@ const AdminPanel = () => {
           api.getAdminAlbums()
         ]);
 
-        // Добавляем категории к артистам, если их нет
-      const artistsWithCategory = artistsRes.data.map(artist => ({
-        ...artist,
-        category: artist.category || 'other'
-      }));
-      
-      setArtists(artistsWithCategory);
-      setAlbums(albumsRes.data);
+        const artistsWithCategory = artistsRes.data.map(artist => ({
+          ...artist,
+          category: artist.category || 'other'
+        }));
+
+        setArtists(artistsWithCategory);
+        setAlbums(albumsRes.data);
 
       } catch (err) {
         setError(err.response?.data?.message || err.message);
@@ -67,9 +64,18 @@ const AdminPanel = () => {
     fetchData();
   }, []);
 
-  // Создание нового артиста
+  // Функции для перевода категорий
+  const translateCategory = (category) => {
+    switch (category) {
+      case 'female_group': return 'Женские группы';
+      case 'male_group': return 'Мужские группы';
+      case 'solo': return 'Сольные исполнители';
+      default: return 'Другие';
+    }
+  };
 
-const handleCreateArtist = async (artistData) => {
+  // Создание нового артиста
+  const handleCreateArtist = async (artistData) => {
     try {
       const response = await api.createArtist(artistData);
       setArtists([...artists, response.data]);
@@ -82,7 +88,7 @@ const handleCreateArtist = async (artistData) => {
   };
 
   // Создание нового альбома
- const handleCreateAlbum = async (albumData) => {
+  const handleCreateAlbum = async (albumData) => {
     try {
       const response = await api.createAlbum(albumData);
       setAlbums([...albums, response.data]);
@@ -94,44 +100,235 @@ const handleCreateArtist = async (artistData) => {
     }
   };
 
-  // Группировка артистов по категориям
-  const groupedArtists = artists.reduce((acc, artist) => {
-    const category = artist.category || 'other';
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(artist);
-    return acc;
-  }, {});
 
-  // Группировка альбомов по артистам и категориям
-  const groupedAlbums = albums.reduce((acc, album) => {
-    const artist = artists.find(a => a.id === album.artist_id);
-    if (artist) {
-      const category = artist.category || 'other';
-      if (!acc[category]) {
-        acc[category] = {};
-      }
-      if (!acc[category][artist.id]) {
-        acc[category][artist.id] = {
-          artist,
-          albums: []
-        };
-      }
-      acc[category][artist.id].albums.push(album);
-    }
-    return acc;
-  }, {});
-
-  // Функции для перевода категорий
-  const translateCategory = (category) => {
-    switch (category) {
-      case 'female_group': return 'Женские группы';
-      case 'male_group': return 'Мужские группы';
-      case 'solo': return 'Сольные исполнители';
-      default: return 'Другие';
+  // Функции для открытия форм редактирования
+  const handleEditArtist = async (id) => {
+    try {
+      const response = await api.getArtistById(id);
+      setEditingArtist(response.data);
+      setIsArtistModalOpen(true);
+    } catch (error) {
+      console.error('Error fetching artist:', error);
+      alert('Не удалось загрузить данные артиста');
     }
   };
+
+const handleEditAlbum = async (id) => {
+  try {
+    const response = await api.getAlbumById(id);
+    
+    // Форматируем дату в формат yyyy-MM-dd
+    const formatDate = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const albumData = {
+      ...response.data,
+      artist_id: response.data.artist_id?.toString() || '',
+      release_date: formatDateForInput(response.data.release_date),
+      versions: response.data.versions || [{
+        version_name: '', 
+        price_diff: 0, 
+        packaging_details: '', 
+        is_limited: false, 
+        stock_quantity: 0
+      }]
+    };
+    
+    setEditingAlbum(albumData);
+    setIsAlbumModalOpen(true);
+  } catch (error) {
+    console.error('Error fetching album:', error);
+    alert('Не удалось загрузить данные альбома');
+  }
+};
+
+
+  // Обновленные обработчики сохранения
+  const handleSaveArtist = async (artistData) => {
+    try {
+      let response;
+      if (editingArtist) {
+        response = await api.updateArtist(editingArtist.id, artistData);
+        setArtists(artists.map(a => a.id === editingArtist.id ? response.data : a));
+      } else {
+        response = await api.createArtist(artistData);
+        setArtists([...artists, response.data]);
+      }
+      setIsArtistModalOpen(false);
+      setEditingArtist(null);
+      alert('Данные артиста успешно сохранены!');
+    } catch (error) {
+      console.error('Error saving artist:', error);
+      alert(`Ошибка сохранения: ${error.response?.data?.message || error.message}`);
+    }
+  };
+
+const handleSaveAlbum = async (albumData) => {
+  try {
+    // Преобразуем дату обратно в ISO строку перед отправкой
+    const dataToSend = {
+      ...albumData,
+      release_date: albumData.release_date ? new Date(albumData.release_date).toISOString() : null
+    };
+
+    let response;
+    if (editingAlbum) {
+      response = await api.updateAlbum(editingAlbum.id, dataToSend);
+      setAlbums(albums.map(a => a.id === editingAlbum.id ? response.data : a));
+    } else {
+      response = await api.createAlbum(dataToSend);
+      setAlbums([...albums, response.data]);
+    }
+    
+    setIsAlbumModalOpen(false);
+    setEditingAlbum(null);
+    alert('Данные альбома успешно сохранены!');
+  } catch (error) {
+    console.error('Error saving album:', error);
+    alert(`Ошибка сохранения: ${error.response?.data?.message || error.message}`);
+  }
+};
+
+
+
+  // Подготовка данных для таблицы альбомов
+  const preparedAlbums = albums.map(album => {
+    const artist = artists.find(a => a.id === album.artist_id);
+    return {
+      ...album,
+      artistName: artist?.name || 'Неизвестно',
+      statusText: album.status === 'in_stock' ? 'В наличии' :
+        album.status === 'pre_order' ? 'Предзаказ' : 'Нет в наличии',
+      isLimited: album.versions?.some(v => v.is_limited) || false,
+      isPreOrder: album.status === 'pre_order',
+      priceText: `$${album.base_price}`
+    };
+  });
+
+  // Колонки для таблицы артистов
+  const artistColumns = [
+    {
+      field: 'name',
+      headerName: 'Имя артиста',
+      width: 200,
+      sortable: true
+    },
+    {
+      field: 'category',
+      headerName: 'Категория',
+      width: 200,
+      sortable: true,
+      valueGetter: (params) => params?.row?.category ? translateCategory(params.row.category) : ''
+    },
+    {
+      field: 'actions',
+      headerName: 'Действия',
+      width: 250,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => (
+        <div>
+            <Button 
+          startIcon={<EditIcon />}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleEditArtist(params.row.id);
+          }}
+        >
+          
+        </Button>
+          <Button
+            startIcon={<DeleteIcon />}
+            color="error"
+            onClick={(e) => {
+              e.stopPropagation();
+              console.log('Delete artist:', params.row);
+            }}
+          >
+            
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  // Колонки для таблицы альбомов
+  const albumColumns = [
+    {
+      field: 'title',
+      headerName: 'Название альбома',
+      width: 200,
+      sortable: true
+    },
+    {
+      field: 'artistName',
+      headerName: 'Артист',
+      width: 200,
+      sortable: true
+    },
+    {
+      field: 'priceText',
+      headerName: 'Базовая цена',
+      width: 150,
+      sortable: true
+    },
+    {
+      field: 'isPreOrder',
+      headerName: 'Предзаказ',
+      width: 150,
+      sortable: true,
+      valueGetter: (params) => params?.row?.isPreOrder ? 'Да' : 'Нет'
+    },
+    {
+      field: 'isLimited',
+      headerName: 'Лимитированная',
+      width: 150,
+      sortable: true,
+      valueGetter: (params) => params?.row?.isLimited ? 'Да' : 'Нет'
+    },
+    {
+      field: 'statusText',
+      headerName: 'Статус',
+      width: 150,
+      sortable: true
+    },
+    {
+      field: 'actions',
+      headerName: 'Действия',
+      width: 250,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => (
+        <div>
+           <Button 
+          startIcon={<EditIcon />}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleEditAlbum(params.row.id); 
+          }}
+        >
+         
+        </Button>
+          <Button
+            startIcon={<DeleteIcon />}
+            color="error"
+            onClick={(e) => {
+              e.stopPropagation();
+              console.log('Delete album:', params.row);
+            }}
+          >
+            
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   if (loading) {
     return (
@@ -158,162 +355,185 @@ const handleCreateArtist = async (artistData) => {
     );
   }
 
-  //наполнение страницы
-
   return (
     <div className="admin-panel">
-      <h2>Административная панель</h2>
+      <div className="admin-layout">
+        {/* Боковое меню */}
+        <div className="admin-menu">
+          <Paper elevation={3}>
+            <List>
+              <ListItem disablePadding>
+                <ListItemButton
+                  selected={tabValue === 'albums'}
+                  onClick={() => setTabValue('albums')}
+                >
+                  <ListItemText primary="Альбомы" />
+                </ListItemButton>
+              </ListItem>
+              <ListItem disablePadding>
+                <ListItemButton
+                  selected={tabValue === 'artists'}
+                  onClick={() => setTabValue('artists')}
+                >
+                  <ListItemText primary="Артисты" />
+                </ListItemButton>
+              </ListItem>
+              <ListItem disablePadding>
+                <ListItemButton
+                  selected={tabValue === 'discounts'}
+                  onClick={() => setTabValue('discounts')}
+                >
+                  <ListItemText primary="Скидки" />
+                </ListItemButton>
+              </ListItem>
+            </List>
+          </Paper>
+        </div>
 
-      <Tabs
-        value={tabValue}
-        onChange={(e, newVal) => setTabValue(newVal)}
-        variant="fullWidth"
+        {/* Основное содержимое */}
+        <div className="admin-content">
+          <Paper elevation={3} className="content-paper">
+            {tabValue === 'artists' && (
+              <Box p={3} sx={{ height: '100%' }}>
+                <Toolbar className="admin-header">
+                  <Typography variant="h6" component="div" sx={{ flex: '1 1 100%' }}>
+                    Управление артистами
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => setIsArtistModalOpen(true)}
+                  >
+                    Добавить артиста
+                  </Button>
+                </Toolbar>
+
+
+
+
+                <Box sx={{ height: 600, width: '100%', mt: 2 }}>
+                  <DataGrid
+                    rows={artists}
+                    columns={artistColumns}
+                    initialState={{
+                      pagination: {
+                        paginationModel: {
+                          pageSize: 10,
+                        },
+                      },
+                    }}
+                    pageSizeOptions={[5, 10, 25]}
+                    disableRowSelectionOnClick
+                    getRowId={(row) => row.id}
+                  />
+                </Box>
+              </Box>
+            )}
+
+            {tabValue === 'albums' && (
+              <Box p={3} sx={{ height: '100%' }}>
+                <Toolbar className="admin-header">
+                  <Typography variant="h6" component="div" sx={{ flex: '1 1 100%' }}>
+                    Управление альбомами
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => setIsAlbumModalOpen(true)}
+                  >
+                    Добавить альбом
+                  </Button>
+                </Toolbar>
+
+                {/* Заглушка для фильтров */}
+
+
+                <Box sx={{ height: 600, width: '100%', mt: 2 }}>
+                  <DataGrid
+                    rows={preparedAlbums}
+                    columns={albumColumns}
+                    initialState={{
+                      pagination: {
+                        paginationModel: {
+                          pageSize: 10,
+                        },
+                      },
+                    }}
+                    pageSizeOptions={[5, 10, 25]}
+                    disableRowSelectionOnClick
+                    getRowId={(row) => row.id}
+                  />
+                </Box>
+              </Box>
+            )}
+
+            {tabValue === 'discounts' && (
+              <Box p={3}>
+                <h2>Управление скидками</h2>
+                <p>Раздел в разработке</p>
+              </Box>
+            )}
+          </Paper>
+        </div>
+      </div>
+
+      {/* Для артистов */}
+      <Modal
+        open={isArtistModalOpen}
+        onClose={() => {
+          setIsArtistModalOpen(false);
+          setEditingArtist(null);
+        }}
+        title={editingArtist ? 'Редактирование артиста' : 'Добавление нового артиста'}
       >
-        <Tab label="Артисты" />
-        <Tab label="Альбомы" />
-      </Tabs>
-
-      {/* Вкладка артистов */}
-      {tabValue === 0 && (
-        <Box p={3}>
-          <h3>Управление артистами</h3>
-
-          {/* форма добавления артиста */}
-
-          
-          <Button 
-              variant="contained" 
-              startIcon={<AddIcon />}
-              onClick={() => setIsArtistModalOpen(true)}
-            >
-              Добавить артиста
-            </Button>
-
-         
-
-          {/* существующие артисты */}
-
-          <div className="list-section">
-            {Object.entries(groupedArtists).map(([category, artistsList]) => (
-              <div key={category} className="category-group">
-                <h3 className="category-header">{translateCategory(category)}</h3>
-                <div className="artists-list">
-                  {artistsList.map(artist => (
-                    <div key={artist.id} className="artist-item">
-                      <div className="artist-info">
-                        <h4>{artist.name}</h4>
-                        {artist.image_url && (
-                          <img 
-                            src={artist.image_url} 
-                            alt={artist.name}
-                            className="artist-image"
-                          />
-                        )}
-                      </div>
-                      {artist.description && (
-                        <p className="artist-description">{artist.description}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-            
-
-        </Box>
-      )}
-
-      {/* Вкладка альбомов */}
-
-      {tabValue === 1 && (
-        <Box p={3}>
-          <h3>Управление альбомами</h3>
-
-
-          {/* форма добавления альбома */}
-          
-          <Button 
-              variant="contained" 
-              startIcon={<AddIcon />}
-              onClick={() => setIsAlbumModalOpen(true)}
-            >
-              Добавить альбом
-            </Button>
-
-          {/* существующие альбомы */}
-
-          <div className="list-section">
-            {Object.entries(groupedAlbums).map(([category, artistsData]) => (
-              <div key={category} className="category-group">
-                <h3 className="category-header">{translateCategory(category)}</h3>
-                {Object.values(artistsData).map(({artist, albums}) => (
-                  <div key={artist.id} className="artist-albums-group">
-                    <div className="artist-header">
-                      <h4>{artist.name}</h4>
-                    </div>
-                    <div className="albums-list">
-                      {albums.map(album => (
-                        <div key={album.id} className="album-item">
-                          <div className="album-main-info">
-                            <h5>{album.title}</h5>
-                            <p>Цена: ${album.base_price}</p>
-                            <p>Статус: {album.status === 'in_stock' ? 'В наличии' : 
-                                       album.status === 'pre_order' ? 'Предзаказ' : 'Нет в наличии'}</p>
-                          </div>
-                          {album.versions && album.versions.length > 0 && (
-                            <div className="album-versions">
-                              <h6>Версии:</h6>
-                              <ul>
-                                {album.versions.map(version => (
-                                  <li key={version.id}>
-                                    {version.version_name} (+${version.price_diff})
-                                    {version.is_limited && ' (Лимитированная)'}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-
-        </Box>
-      )}
-
-        {/* Модальные окна */}
-
-
-        <Modal 
-        open={isArtistModalOpen} 
-        onClose={() => setIsArtistModalOpen(false)}
-        title="Добавление нового артиста"
-      >
-        <ArtistForm 
-          onSubmit={handleCreateArtist}
-          onCancel={() => setIsArtistModalOpen(false)}
+        <ArtistForm
+          onSubmit={handleSaveArtist}
+          onCancel={() => {
+            setIsArtistModalOpen(false);
+            setEditingArtist(null);
+          }}
+          initialData={editingArtist || {
+            name: '',
+            category: 'female_group',
+            description: '',
+            image_url: ''
+          }}
         />
       </Modal>
 
-       <Modal 
-        open={isAlbumModalOpen} 
-        onClose={() => setIsAlbumModalOpen(false)}
-        title="Добавление нового альбома"
+      {/* Для альбомов */}
+      <Modal
+        open={isAlbumModalOpen}
+        onClose={() => {
+          setIsAlbumModalOpen(false);
+          setEditingAlbum(null);
+        }}
+        title={editingAlbum ? 'Редактирование альбома' : 'Добавление нового альбома'}
       >
-        <AlbumForm 
-          artists={artists} 
-          onSubmit={handleCreateAlbum}
-          onCancel={() => setIsAlbumModalOpen(false)}
+        <AlbumForm
+          artists={artists}
+          onSubmit={handleSaveAlbum}
+          onCancel={() => {
+            setIsAlbumModalOpen(false);
+            setEditingAlbum(null);
+          }}
+          initialData={editingAlbum || {
+            artist_id: '',
+            title: '',
+            base_price: '',
+            description: '',
+            release_date: '',
+            status: 'in_stock',
+            versions: [{
+              version_name: '',
+              price_diff: 0,
+              packaging_details: '',
+              is_limited: false,
+              stock_quantity: 0
+            }]
+          }}
         />
       </Modal>
-
-
     </div>
   );
 };

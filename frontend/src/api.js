@@ -73,7 +73,7 @@ createAlbum: (albumData) => apiInstance.post('/admin/albums', albumData),
 // Добавьте метод для проверки авторизации
 checkAuth: () => apiInstance.get('/check-auth'),
 
-// Обновите запросы к админке с обработкой ошибок
+// Запросы к админке с обработкой ошибок
 getAdminArtists: async () => {
   try {
     // Сначала проверяем авторизацию
@@ -96,7 +96,11 @@ createArtist: (artistData) => apiInstance.post('/admin/artists', artistData),
   validateToken: () => apiInstance.get('/api/validate-token'),
 
 
-
+// Добавляем новые методы для редактирования
+updateArtist: (id, artistData) => apiInstance.put(`/admin/artists/${id}`, artistData),
+updateAlbum: (id, albumData) => apiInstance.put(`/admin/albums/${id}`, albumData),
+getArtistById: (id) => apiInstance.get(`/admin/artists/${id}`),
+getAlbumById: (id) => apiInstance.get(`/admin/albums/${id}`),
 
 
   // Изменяем функцию регистрации
