@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Tab, Tabs, Box, TextField, Button,
-  Select, MenuItem, FormControl, InputLabel,
-  Checkbox, FormControlLabel, CircularProgress
+  Tab, Tabs, Box, Button, CircularProgress
 } from '@mui/material';
+
+import AddIcon from '@mui/icons-material/Close';
+
 import api from '../../api';
+import { Modal } from '../../components/Modal/Modal';
+import { AlbumForm } from '../../components/AlbumForm/AlbumForm';
+import { ArtistForm } from '../../components/ArtistForm/ArtistForm';
 import './AdminPanel.css';
+
+
 
 const AdminPanel = () => {
   const [tabValue, setTabValue] = useState(0);
@@ -14,34 +20,14 @@ const AdminPanel = () => {
 
   // Состояния для артистов
   const [artists, setArtists] = useState([]);
-  const [newArtist, setNewArtist] = useState({
-    name: '',
-    category: 'female_group',
-    description: '',
-    image_url: ''
-  });
+
+  
+   const [isAlbumModalOpen, setIsAlbumModalOpen] = useState(false);
+   const [isArtistModalOpen, setIsArtistModalOpen] = useState(false);
 
   // Состояния для альбомов
   const [albums, setAlbums] = useState([]);
-  const [newAlbum, setNewAlbum] = useState({
-    artist_id: '',
-    title: '',
-    base_price: '',
-    description: '',
-    release_date: '',
-    status: 'in_stock',
-    preorder_start: '',
-    preorder_end: '',
-    versions: [{
-      version_name: '',
-      price_diff: 0,
-      description: '',
-      packaging_details: '',
-      preorder_bonuses: '',
-      is_limited: false,
-      stock_quantity: 0
-    }]
-  });
+
 
   // Загрузка данных
   useEffect(() => {
@@ -69,7 +55,7 @@ const AdminPanel = () => {
       
       setArtists(artistsWithCategory);
       setAlbums(albumsRes.data);
-      
+
       } catch (err) {
         setError(err.response?.data?.message || err.message);
         console.error('Admin panel error:', err);
@@ -82,24 +68,12 @@ const AdminPanel = () => {
   }, []);
 
   // Создание нового артиста
-  const handleCreateArtist = async () => {
-    if (!newArtist.name) {
-      alert('Название группы обязательно');
-      return;
-    }
 
+const handleCreateArtist = async (artistData) => {
     try {
-      const response = await api.createArtist(newArtist);
+      const response = await api.createArtist(artistData);
       setArtists([...artists, response.data]);
-
-      // Сброс формы
-      setNewArtist({
-        name: '',
-        category: 'female_group',
-        description: '',
-        image_url: ''
-      });
-
+      setIsArtistModalOpen(false);
       alert('Артист успешно создан!');
     } catch (error) {
       console.error('Error creating artist:', error);
@@ -107,89 +81,12 @@ const AdminPanel = () => {
     }
   };
 
-  // Обработчики для версий альбома
-  const handleAlbumVersionChange = (index, field, value) => {
-    const newVersions = [...newAlbum.versions];
-    newVersions[index][field] = value;
-    setNewAlbum({ ...newAlbum, versions: newVersions });
-  };
-
-  // Добавление новой версии
-  const addNewVersion = () => {
-    setNewAlbum({
-      ...newAlbum,
-      versions: [
-        ...newAlbum.versions,
-        {
-          version_name: '',
-          price_diff: 0,
-          description: '',
-          packaging_details: '',
-          preorder_bonuses: '',
-          is_limited: false,
-          stock_quantity: 0
-        }
-      ]
-    });
-  };
-
-  // Удаление версии
-  const removeVersion = (index) => {
-    const newVersions = [...newAlbum.versions];
-    newVersions.splice(index, 1);
-    setNewAlbum({ ...newAlbum, versions: newVersions });
-  };
-
   // Создание нового альбома
-  const handleCreateAlbum = async () => {
-    // Валидация
-    if (!newAlbum.artist_id || !newAlbum.title || !newAlbum.base_price) {
-      alert('Заполните обязательные поля: артист, название, базовая цена');
-      return;
-    }
-
-    if (newAlbum.versions.some(v => !v.version_name)) {
-      alert('У всех версий должно быть название');
-      return;
-    }
-
+ const handleCreateAlbum = async (albumData) => {
     try {
-      // Преобразование типов данных
-      const albumData = {
-        ...newAlbum,
-        release_date: newAlbum.release_date || null,
-        base_price: parseFloat(newAlbum.base_price),
-        versions: newAlbum.versions.map(v => ({
-          ...v,
-          price_diff: parseFloat(v.price_diff),
-          stock_quantity: parseInt(v.stock_quantity)
-        }))
-      };
-
       const response = await api.createAlbum(albumData);
       setAlbums([...albums, response.data]);
-
-      // Сброс формы
-      setNewAlbum({
-        artist_id: '',
-        title: '',
-        base_price: '',
-        description: '',
-        release_date: '',
-        status: 'in_stock',
-        preorder_start: '',
-        preorder_end: '',
-        versions: [{
-          version_name: '',
-          price_diff: 0,
-          description: '',
-          packaging_details: '',
-          preorder_bonuses: '',
-          is_limited: false,
-          stock_quantity: 0
-        }]
-      });
-
+      setIsAlbumModalOpen(false);
       alert('Альбом успешно создан!');
     } catch (error) {
       console.error('Error creating album:', error);
@@ -261,8 +158,6 @@ const AdminPanel = () => {
     );
   }
 
-
-
   //наполнение страницы
 
   return (
@@ -285,63 +180,16 @@ const AdminPanel = () => {
 
           {/* форма добавления артиста */}
 
-          <div className="form-section">
-            <TextField
-              label="Название группы*"
-              value={newArtist.name}
-              onChange={(e) => setNewArtist({ ...newArtist, name: e.target.value })}
-              fullWidth
-              margin="normal"
-              variant="outlined"
-            />
-
-            <FormControl fullWidth margin="normal" variant="outlined">
-              <InputLabel>Категория</InputLabel>
-              <Select
-                value={newArtist.category}
-                onChange={(e) => setNewArtist({ ...newArtist, category: e.target.value })}
-                label="Категория"
-              >
-                <MenuItem value="female_group">Женская группа</MenuItem>
-                <MenuItem value="male_group">Мужская группа</MenuItem>
-                <MenuItem value="solo">Сольный артист</MenuItem>
-              </Select>
-            </FormControl>
-
-            <TextField
-              label="Описание"
-              value={newArtist.description}
-              onChange={(e) => setNewArtist({ ...newArtist, description: e.target.value })}
-              fullWidth
-              margin="normal"
-              multiline
-              rows={3}
-              variant="outlined"
-            />
-
-
-
-            <TextField
-              label="URL изображения"
-              value={newArtist.image_url}
-              onChange={(e) => setNewArtist({ ...newArtist, image_url: e.target.value })}
-              fullWidth
-              margin="normal"
-              variant="outlined"
-              placeholder="https://example.com/image.jpg"
-            />
-
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleCreateArtist}
-              style={{ marginTop: 20 }}
-              fullWidth
-              size="large"
+          
+          <Button 
+              variant="contained" 
+              startIcon={<AddIcon />}
+              onClick={() => setIsArtistModalOpen(true)}
             >
-              Создать артиста
+              Добавить артиста
             </Button>
-          </div>
+
+         
 
           {/* существующие артисты */}
 
@@ -372,6 +220,8 @@ const AdminPanel = () => {
             ))}
           </div>
 
+            
+
         </Box>
       )}
 
@@ -384,212 +234,13 @@ const AdminPanel = () => {
 
           {/* форма добавления альбома */}
           
-          <div className="form-section">
-            <FormControl fullWidth margin="normal" variant="outlined">
-              <InputLabel>Артист*</InputLabel>
-              <Select
-                value={newAlbum.artist_id}
-                onChange={(e) => setNewAlbum({ ...newAlbum, artist_id: e.target.value })}
-                label="Артист*"
-              >
-                <MenuItem value="">Выберите артиста</MenuItem>
-                {artists.map(artist => (
-                  <MenuItem key={artist.id} value={artist.id}>
-                    {artist.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <TextField
-              label="Название альбома*"
-              value={newAlbum.title}
-              onChange={(e) => setNewAlbum({ ...newAlbum, title: e.target.value })}
-              fullWidth
-              margin="normal"
-              variant="outlined"
-            />
-
-            <TextField
-              label="Базовая цена*"
-              type="number"
-              value={newAlbum.base_price}
-              onChange={(e) => setNewAlbum({ ...newAlbum, base_price: e.target.value })}
-              fullWidth
-              margin="normal"
-              variant="outlined"
-              inputProps={{ min: "0", step: "0.01" }}
-            />
-
-            <TextField
-              label="Описание альбома"
-              value={newAlbum.description}
-              onChange={(e) => setNewAlbum({ ...newAlbum, description: e.target.value })}
-              fullWidth
-              margin="normal"
-              multiline
-              rows={3}
-              variant="outlined"
-            />
-            <TextField
-              label="Дата релиза"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={newAlbum.release_date}
-              onChange={(e) => setNewAlbum({ ...newAlbum, release_date: e.target.value })}
-              fullWidth
-              margin="normal"
-              variant="outlined"
-            />
-            <FormControl fullWidth margin="normal" variant="outlined">
-              <InputLabel>Статус</InputLabel>
-              <Select
-                value={newAlbum.status}
-                onChange={(e) => setNewAlbum({ ...newAlbum, status: e.target.value })}
-                label="Статус"
-              >
-                <MenuItem value="in_stock">В наличии</MenuItem>
-                <MenuItem value="pre_order">Предзаказ</MenuItem>
-                <MenuItem value="out_of_stock">Нет в наличии</MenuItem>
-              </Select>
-            </FormControl>
-
-            {newAlbum.status === 'pre_order' && (
-              <div className="preorder-dates">
-                <TextField
-                  label="Дата начала предзаказа"
-                  type="date"
-                  InputLabelProps={{ shrink: true }}
-                  value={newAlbum.preorder_start}
-                  onChange={(e) => setNewAlbum({ ...newAlbum, preorder_start: e.target.value })}
-                  fullWidth
-                  margin="normal"
-                  variant="outlined"
-                />
-                <TextField
-                  label="Дата окончания предзаказа"
-                  type="date"
-                  InputLabelProps={{ shrink: true }}
-                  value={newAlbum.preorder_end}
-                  onChange={(e) => setNewAlbum({ ...newAlbum, preorder_end: e.target.value })}
-                  fullWidth
-                  margin="normal"
-                  variant="outlined"
-                />
-              </div>
-            )}
-
-            <h3>Версии альбома</h3>
-            {newAlbum.versions.map((version, index) => (
-              <div key={index} className="version-form">
-                <div className="version-header">
-                  <h4>Версия #{index + 1}</h4>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    size="small"
-                    onClick={() => removeVersion(index)}
-                    disabled={newAlbum.versions.length === 1}
-                  >
-                    Удалить
-                  </Button>
-                </div>
-
-                <TextField
-                  label="Название версии*"
-                  value={version.version_name}
-                  onChange={(e) => handleAlbumVersionChange(index, 'version_name', e.target.value)}
-                  fullWidth
-                  margin="normal"
-                  variant="outlined"
-                />
-
-                <TextField
-                  label="Доплата за версию"
-                  type="number"
-                  value={version.price_diff}
-                  onChange={(e) => handleAlbumVersionChange(index, 'price_diff', e.target.value)}
-                  fullWidth
-                  margin="normal"
-                  variant="outlined"
-                  inputProps={{ min: "0", step: "0.01" }}
-                />
-
-                <TextField
-                  label="Описание версии"
-                  value={version.description}
-                  onChange={(e) => handleAlbumVersionChange(index, 'description', e.target.value)}
-                  fullWidth
-                  margin="normal"
-                  multiline
-                  rows={2}
-                  variant="outlined"
-                />
-
-                <TextField
-                  label="Наполнение"
-                  value={version.packaging_details}
-                  onChange={(e) => handleAlbumVersionChange(index, 'packaging_details', e.target.value)}
-                  fullWidth
-                  margin="normal"
-                  variant="outlined"
-                />
-
-                <TextField
-                  label="Бонусы предзаказа"
-                  value={version.preorder_bonuses}
-                  onChange={(e) => handleAlbumVersionChange(index, 'preorder_bonuses', e.target.value)}
-                  fullWidth
-                  margin="normal"
-                  variant="outlined"
-                />
-
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={version.is_limited}
-                      onChange={(e) => handleAlbumVersionChange(index, 'is_limited', e.target.checked)}
-                      color="primary"
-                    />
-                  }
-                  label="Лимитированная версия"
-                />
-
-                <TextField
-                  label="Количество в наличии"
-                  type="number"
-                  value={version.stock_quantity}
-                  onChange={(e) => handleAlbumVersionChange(index, 'stock_quantity', e.target.value)}
-                  fullWidth
-                  margin="normal"
-                  variant="outlined"
-                  inputProps={{ min: "0" }}
-                />
-              </div>
-            ))}
-
-            <Button
-              variant="outlined"
-              onClick={addNewVersion}
-              style={{ marginTop: 10 }}
-              fullWidth
+          <Button 
+              variant="contained" 
+              startIcon={<AddIcon />}
+              onClick={() => setIsAlbumModalOpen(true)}
             >
-              + Добавить версию
+              Добавить альбом
             </Button>
-
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleCreateAlbum}
-              style={{ marginTop: 20 }}
-              fullWidth
-              size="large"
-            >
-              Создать альбом
-            </Button>
-          </div>
-
-
 
           {/* существующие альбомы */}
 
@@ -633,11 +284,36 @@ const AdminPanel = () => {
             ))}
           </div>
 
-
-
-
         </Box>
       )}
+
+        {/* Модальные окна */}
+
+
+        <Modal 
+        open={isArtistModalOpen} 
+        onClose={() => setIsArtistModalOpen(false)}
+        title="Добавление нового артиста"
+      >
+        <ArtistForm 
+          onSubmit={handleCreateArtist}
+          onCancel={() => setIsArtistModalOpen(false)}
+        />
+      </Modal>
+
+       <Modal 
+        open={isAlbumModalOpen} 
+        onClose={() => setIsAlbumModalOpen(false)}
+        title="Добавление нового альбома"
+      >
+        <AlbumForm 
+          artists={artists} 
+          onSubmit={handleCreateAlbum}
+          onCancel={() => setIsAlbumModalOpen(false)}
+        />
+      </Modal>
+
+
     </div>
   );
 };
