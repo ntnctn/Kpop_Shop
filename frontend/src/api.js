@@ -65,13 +65,47 @@ export default {
     return apiInstance.get('/artist_categories');
   },
 
+  // НОВЫЕ АДМИНСКИЕ МЕТОДЫ
+getAdminAlbums: () => apiInstance.get('/admin/albums'),
+createAlbum: (albumData) => apiInstance.post('/admin/albums', albumData),
+  
+
+// Добавьте метод для проверки авторизации
+checkAuth: () => apiInstance.get('/check-auth'),
+
+// Обновите запросы к админке с обработкой ошибок
+getAdminArtists: async () => {
+  try {
+    // Сначала проверяем авторизацию
+    const authCheck = await apiInstance.get('/check-auth');
+    if (!authCheck.data.is_admin) {
+      throw new Error('Not an admin');
+    }
+    // Затем делаем запрос
+    return await apiInstance.get('/admin/artists');
+  } catch (error) {
+    console.error('Admin request failed:', error);
+    throw error;
+  }
+},
+
+
+
+createArtist: (artistData) => apiInstance.post('/admin/artists', artistData),
+  // Метод для валидации токена
+  validateToken: () => apiInstance.get('/api/validate-token'),
+
+
+
+
+
   // Изменяем функцию регистрации
-// Исправляем запрос регистрации
-register: async (email, password, firstName, lastName) => {
+  // Исправляем запрос регистрации
+  register: async (email, password, firstName, lastName) => {
     try {
       // Сначала отправляем OPTIONS запрос
       await apiInstance.options('/register');
-      
+
       // Затем основной POST запрос
       const response = await apiInstance.post('/register', {
         email,
@@ -85,21 +119,21 @@ register: async (email, password, firstName, lastName) => {
       throw new Error(error.response?.data?.message || 'Registration failed');
     }
   },
-  
+
   // Аналогично для login
-login: async (email, password) => {
-  try {
-    const response = await apiInstance.post('/login', { email, password });
-    console.log("Full login response:", response.data); // Для отладки
-    
-    // Возвращаем весь объект ответа
-    return response.data;
-  } catch (error) {
-    console.error('Login request error:', error);
-    throw error;
-  }
-},
-  
+  login: async (email, password) => {
+    try {
+      const response = await apiInstance.post('/login', { email, password });
+      console.log("Full login response:", response.data); // Для отладки
+
+      // Возвращаем весь объект ответа
+      return response.data;
+    } catch (error) {
+      console.error('Login request error:', error);
+      throw error;
+    }
+  },
+
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userData');
