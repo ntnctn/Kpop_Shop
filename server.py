@@ -512,57 +512,50 @@ def admin_albums():
         elif request.method == 'POST':
             data = request.get_json()
             
-            required_fields = ['artist_id', 'title', 'base_price', 'versions']
-            if not all(field in data for field in required_fields):
+            # Валидация обязательных полей
+            if not data or 'artist_id' not in data or 'title' not in data or 'base_price' not in data:
                 return jsonify({'message': 'Missing required fields'}), 400
                 
-            preorder_start = data.get('preorder_start')
-            preorder_end = data.get('preorder_end')
-            preorder_start = preorder_start if preorder_start else None
-            preorder_end = preorder_end if preorder_end else None
-            
+            # Вставка альбома
             cur.execute('''
                 INSERT INTO albums (
                     artist_id, title, base_price, description, 
-                    release_date, status, main_image_url, is_preorder,
-                    preorder_start, preorder_end
+                    release_date, status, main_image_url, is_preorder
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
                 data['artist_id'], 
                 data['title'], 
                 data['base_price'], 
-                data.get('description'),
+                data.get('description', ''),
                 data.get('release_date'), 
                 data.get('status', 'in_stock'),
-                data.get('main_image_url'), 
-                data.get('status') == 'pre_order',
-                preorder_start,
-                preorder_end
+                data.get('main_image_url', ''), 
+                data.get('is_preorder', False)
             ))
             album_id = cur.fetchone()['id']
             
-            for version in data['versions']:
+            # Вставка версий (только существующие в БД поля)
+            for version in data.get('versions', []):
                 cur.execute('''
                     INSERT INTO album_versions (
-                        album_id, version_name, price_diff, description,
-                        packaging_details, preorder_bonuses, is_limited, stock_quantity
+                        album_id, version_name, price_diff, packaging_details,
+                        stock_quantity, is_limited
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                 ''', (
                     album_id,
-                    version['version_name'],
-                    version.get('price_diff', 0),
-                    version.get('description', ''),
+                    version.get('version_name', ''),
+                    float(version.get('price_diff', 0)),
                     version.get('packaging_details', ''),
-                    version.get('preorder_bonuses', ''),
-                    version.get('is_limited', False),
-                    version.get('stock_quantity', 0)
+                    int(version.get('stock_quantity', 0)),
+                    bool(version.get('is_limited', False))
                 ))
             
             conn.commit()
             
+            # Возвращаем созданный альбом
             cur.execute('SELECT * FROM albums WHERE id = %s', (album_id,))
             album = cur.fetchone()
             cur.execute('SELECT * FROM album_versions WHERE album_id = %s', (album_id,))
@@ -577,6 +570,7 @@ def admin_albums():
     finally:
         cur.close()
         conn.close()
-
+        
+        
 if __name__ == '__main__':
     app.run(debug=True)

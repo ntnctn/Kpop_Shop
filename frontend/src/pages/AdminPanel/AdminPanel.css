@@ -114,3 +114,87 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.category-group {
+  margin-bottom: 2rem;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.category-header {
+  color: #333;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #ddd;
+}
+
+.artist-item {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: #f9f9f9;
+  border-radius: 6px;
+}
+
+.artist-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.artist-image {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.artist-description {
+  margin-top: 0.5rem;
+  color: #666;
+}
+
+.artist-albums-group {
+  margin-left: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.artist-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.album-item {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 6px;
+}
+
+.album-main-info {
+  margin-bottom: 0.5rem;
+}
+
+.album-versions {
+  padding-left: 1rem;
+  border-left: 2px solid #eee;
+}
+
+.album-versions h6 {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.album-versions ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.album-versions li {
+  font-size: 0.85rem;
+  margin-bottom: 0.3rem;
+}
