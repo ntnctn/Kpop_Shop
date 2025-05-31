@@ -1,4 +1,4 @@
-/* Базовые стили для всего приложения */
+/* Базовые стили для всего приложения
 * {
   box-sizing: border-box;
   margin: 0;
@@ -15,7 +15,6 @@
 .main-content {
     flex: 1 1;
     padding: 20px;
-    /* max-width: 1200px; */
-    /* margin: 0 auto; */
+   
     width: 100%;
-}
+} */

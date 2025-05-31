@@ -1,13 +1,93 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ArtistMenu стили */
+.artist-menu-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 500px;
+  height: 100vh;
+  background-color: var(--mui-palette-background-paper);
+  z-index: 1300;
+  overflow: hidden;
+  box-shadow: 24px 0 24px -24px rgba(0, 0, 0, 0.5);
+  border: none !important; /* Убираем все возможные границы */
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+.artist-menu-backdrop {
+  position: fixed;
+  top: 0;
+  left: 300px;
+  width: calc(100vw - 300px);
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1299;
+}
+
+/* Убираем все границы и скроллбары */
+.artist-menu-container * {
+  border-left: none !important;
+  border-right: none !important;
+}
+
+.artist-menu-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Убираем границы у всех элементов меню */
+.artist-menu-container .MuiList-root,
+.artist-menu-container .MuiListItem-root,
+.artist-menu-container .MuiDivider-root {
+  border-left: none !important;
+  border-right: none !important;
+  border-color: transparent !important;
+}
+
+
+/* PopupAuth стили */
+.popup-auth-container .MuiDialog-paper {
+  max-height: calc(100vh - 64px) !important;
+  overflow: hidden !important;
+  border: none !important;
+  background-color: var(--mui-palette-background-paper);
+}
+
+.popup-auth-content {
+  padding: 16px;
+  overflow: hidden !important;
+}
+
+.popup-auth-content-inner {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.popup-auth-content-inner::-webkit-scrollbar {
+  display: none;
+}
+
+.popup-auth-title {
+  padding: 16px 24px !important;
+  border-bottom: 1px solid var(--mui-palette-divider);
+}
+
+.popup-auth-close-btn {
+  position: absolute !important;
+  right: 8px !important;
+  top: 8px !important;
+}
+
+.popup-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.popup-auth-actions {
+  padding: 0 !important;
+  margin-top: 16px;
+}
+
+.popup-auth-toggle {
+  text-align: center;
+  margin-top: 16px;
 }

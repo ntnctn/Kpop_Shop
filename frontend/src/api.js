@@ -32,18 +32,6 @@ apiInstance.interceptors.request.use(config => {
 });
 
 
-// Обработчик ответов
-// apiInstance.interceptors.response.use(
-//   response => response,
-//   error => {
-//     if (error.response?.status === 401) {
-//       localStorage.removeItem('token');
-//       localStorage.removeItem('userData');
-//     }
-//     return Promise.reject(error);
-//   }
-// );
-
 export default {
   getAlbums() {
     return apiInstance.get('/albums');
@@ -70,7 +58,7 @@ getAdminAlbums: () => apiInstance.get('/admin/albums'),
 createAlbum: (albumData) => apiInstance.post('/admin/albums', albumData),
   
 
-// Добавьте метод для проверки авторизации
+//Метод для проверки авторизации
 checkAuth: () => apiInstance.get('/check-auth'),
 
 // Запросы к админке с обработкой ошибок
@@ -96,11 +84,46 @@ createArtist: (artistData) => apiInstance.post('/admin/artists', artistData),
   validateToken: () => apiInstance.get('/api/validate-token'),
 
 
-// Добавляем новые методы для редактирования
+// Новые методы для редактирования
 updateArtist: (id, artistData) => apiInstance.put(`/admin/artists/${id}`, artistData),
 updateAlbum: (id, albumData) => apiInstance.put(`/admin/albums/${id}`, albumData),
 getArtistById: (id) => apiInstance.get(`/admin/artists/${id}`),
 getAlbumById: (id) => apiInstance.get(`/admin/albums/${id}`),
+
+
+deleteArtist: (id) => apiInstance.delete(`/admin/artists/${id}`),
+deleteAlbum: (id) => apiInstance.delete(`/admin/albums/${id}`),
+
+//обработка ошибок
+deleteArtist: async (id) => {
+  try {
+    const response = await apiInstance.delete(`/admin/artists/${id}`);
+    return response;
+  } catch (error) {
+    console.error('Error deleting artist:', error);
+    throw error;
+  }
+},
+deleteAlbum: async (id) => {
+  try {
+    const response = await apiInstance.delete(`/admin/albums/${id}`);
+    return response;
+  } catch (error) {
+    console.error('Error deleting album:', error);
+    throw error;
+  }
+},
+
+
+// Скидки
+getDiscounts: () => apiInstance.get('/admin/discounts'),
+createDiscount: (discountData) => apiInstance.post('/admin/discounts', discountData),
+updateDiscount: (id, discountData) => apiInstance.put(`/admin/discounts/${id}`, discountData),
+deleteDiscount: (id) => apiInstance.delete(`/admin/discounts/${id}`),
+getDiscountAlbums: (discountId) => apiInstance.get(`/admin/discounts/${discountId}/albums`),
+addAlbumToDiscount: (discountId, albumId) => apiInstance.post(`/admin/discounts/${discountId}/albums`, { album_id: albumId }),
+removeAlbumFromDiscount: (discountId, albumId) => apiInstance.delete(`/admin/discounts/${discountId}/albums/${albumId}`),
+
 
 
   // Изменяем функцию регистрации

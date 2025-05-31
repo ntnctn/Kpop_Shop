@@ -1,12 +1,18 @@
 import React from 'react';
-import './Home.css';
+import { Container, Typography, Box } from '@mui/material';
 
 const Home = () => {
   return (
-    <div className="home">
-      <h1 className="main-title">Добро пожаловать в KpopShop</h1>
-      <p className="subtitle">Лучшие K-POP альбомы по доступным ценам</p>
-    </div>
+    <Container maxWidth="md" sx={{ py: 8, textAlign: 'center' }}>
+      <Box sx={{ my: 4 }}>
+        <Typography variant="h2" component="h1" gutterBottom>
+          Добро пожаловать в KpopShop
+        </Typography>
+        <Typography variant="h5" color="text.secondary">
+          Лучшие K-POP альбомы по доступным ценам
+        </Typography>
+      </Box>
+    </Container>
   );
 };
 

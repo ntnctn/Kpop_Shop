@@ -713,6 +713,250 @@ def admin_album(id):
         conn.close()
 
 
+# Удаление артистов
+
+@app.route('/api/admin/artists/<int:id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_artist(id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Сначала удаляем все альбомы артиста (и их версии)
+        cur.execute('SELECT id FROM albums WHERE artist_id = %s', (id,))
+        album_ids = [row[0] for row in cur.fetchall()]
+        
+        for album_id in album_ids:
+            cur.execute('DELETE FROM album_versions WHERE album_id = %s', (album_id,))
+        
+        cur.execute('DELETE FROM albums WHERE artist_id = %s', (id,))
+        
+        # Затем удаляем самого артиста
+        cur.execute('DELETE FROM artists WHERE id = %s RETURNING id', (id,))
+        deleted = cur.fetchone()
+        
+        if not deleted:
+            conn.rollback()
+            return jsonify({'message': 'Artist not found'}), 404
+            
+        conn.commit()
+        return jsonify({'message': 'Artist and all related albums deleted successfully'}), 200
+        
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Delete artist error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# Удаление альбомов
+
+@app.route('/api/admin/albums/<int:id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_album(id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Удаляем все версии альбома
+        cur.execute('DELETE FROM album_versions WHERE album_id = %s', (id,))
+        
+        # Удаляем сам альбом
+        cur.execute('DELETE FROM albums WHERE id = %s RETURNING id', (id,))
+        deleted = cur.fetchone()
+        
+        if not deleted:
+            conn.rollback()
+            return jsonify({'message': 'Album not found'}), 404
+            
+        conn.commit()
+        return jsonify({'message': 'Album and all versions deleted successfully'}), 200
+        
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Delete album error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+   
+   
+
+# Discount routes
+@app.route('/api/admin/discounts', methods=['GET', 'POST'])
+@jwt_required()
+@admin_required
+def admin_discounts():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        if request.method == 'GET':
+            cur.execute('SELECT * FROM discounts')
+            discounts = cur.fetchall()
+            return jsonify(discounts)
+        
+        elif request.method == 'POST':
+            data = request.get_json()
+            required_fields = ['name', 'discount_percent', 'start_date', 'end_date']
+            if not all(field in data for field in required_fields):
+                return jsonify({'message': 'Missing required fields'}), 400
+            
+            cur.execute(
+                "INSERT INTO discounts (name, description, discount_percent, start_date, end_date, is_active) "
+                "VALUES (%s, %s, %s, %s, %s, %s) RETURNING *",
+                (data['name'], data.get('description'), data['discount_percent'],
+                data['start_date'], data['end_date'], data.get('is_active', True)))
+            new_discount = cur.fetchone()
+            conn.commit()
+            
+            return jsonify(new_discount), 201
+            
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Admin discounts error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/api/admin/discounts/<int:id>', methods=['PUT', 'DELETE'])
+@jwt_required()
+@admin_required
+def admin_discount(id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        if request.method == 'PUT':
+            data = request.get_json()
+            required_fields = ['name', 'discount_percent', 'start_date', 'end_date']
+            if not all(field in data for field in required_fields):
+                return jsonify({'message': 'Missing required fields'}), 400
+            
+            cur.execute(
+                "UPDATE discounts SET name = %s, description = %s, discount_percent = %s, "
+                "start_date = %s, end_date = %s, is_active = %s "
+                "WHERE id = %s RETURNING *",
+                (data['name'], data.get('description'), data['discount_percent'],
+                data['start_date'], data['end_date'], data.get('is_active', True), id))
+            updated_discount = cur.fetchone()
+            
+            if not updated_discount:
+                return jsonify({'message': 'Discount not found'}), 404
+                
+            conn.commit()
+            return jsonify(updated_discount)
+            
+        elif request.method == 'DELETE':
+            # Сначала удаляем связи с альбомами
+            cur.execute('DELETE FROM album_discounts WHERE discount_id = %s', (id,))
+            
+            # Затем удаляем саму скидку
+            cur.execute('DELETE FROM discounts WHERE id = %s RETURNING id', (id,))
+            deleted = cur.fetchone()
+            
+            if not deleted:
+                return jsonify({'message': 'Discount not found'}), 404
+                
+            conn.commit()
+            return jsonify({'message': 'Discount deleted successfully'}), 200
+            
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Admin discount error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/api/admin/discounts/<int:discount_id>/albums', methods=['GET', 'POST'])
+@jwt_required()
+@admin_required
+def discount_albums(discount_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        if request.method == 'GET':
+            cur.execute('''
+                SELECT a.*, ar.name as artist_name 
+                FROM albums a
+                JOIN artists ar ON a.artist_id = ar.id
+                JOIN album_discounts ad ON a.id = ad.album_id
+                WHERE ad.discount_id = %s
+            ''', (discount_id,))
+            albums = cur.fetchall()
+            return jsonify(albums)
+            
+        elif request.method == 'POST':
+            data = request.get_json()
+            if not data or 'album_id' not in data:
+                return jsonify({'message': 'Album ID is required'}), 400
+                
+            # Проверяем существование альбома
+            cur.execute('SELECT id FROM albums WHERE id = %s', (data['album_id'],))
+            if not cur.fetchone():
+                return jsonify({'message': 'Album not found'}), 404
+                
+            # Проверяем, нет ли уже такой связи
+            cur.execute('''
+                SELECT * FROM album_discounts 
+                WHERE discount_id = %s AND album_id = %s
+            ''', (discount_id, data['album_id']))
+            if cur.fetchone():
+                return jsonify({'message': 'Album already in discount'}), 400
+                
+            # Добавляем связь
+            cur.execute('''
+                INSERT INTO album_discounts (discount_id, album_id)
+                VALUES (%s, %s)
+            ''', (discount_id, data['album_id']))
+            
+            conn.commit()
+            return jsonify({'message': 'Album added to discount'}), 201
+            
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Discount albums error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/api/admin/discounts/<int:discount_id>/albums/<int:album_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def remove_album_from_discount(discount_id, album_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute('''
+            DELETE FROM album_discounts 
+            WHERE discount_id = %s AND album_id = %s
+            RETURNING *
+        ''', (discount_id, album_id))
+        
+        if not cur.fetchone():
+            return jsonify({'message': 'Album not found in discount'}), 404
+            
+        conn.commit()
+        return jsonify({'message': 'Album removed from discount'}), 200
+        
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Remove album from discount error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+        
+        
         
 if __name__ == '__main__':
     app.run(debug=True)
+    

@@ -1,75 +1,98 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import ArtistMenu from '../ArtistMenu/ArtistMenu';
-import './Navbar.css';
+import { 
+  AppBar, 
+  Toolbar, 
+  IconButton, 
+  Button, 
+  Typography, 
+  Box,
+  Menu
+} from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
 
 const Navbar = ({ currentUser, onAuthClick, onLogout }) => {
-  const [isMenuOpen, setMenuOpen] = useState(false);
+  const [anchorEl, setAnchorEl] = useState(null);
+  const isMenuOpen = Boolean(anchorEl);
+
+  const handleMenuOpen = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
 
   return (
-    <nav className="navbar">
-      <div className="navbar-left">
-        <button 
-          className="menu-button"
-          onClick={() => setMenuOpen(!isMenuOpen)}
-        >
-          ☰ Группы
-        </button>
-        {isMenuOpen && <ArtistMenu onClose={() => setMenuOpen(false)} />}
-      </div>
-      
-      <div className="navbar-center">
-        <Link to="/" className="logo">KpopShop</Link>
-      </div>
-      
-      <div className="navbar-right">
-        {currentUser ? (
-          <>
-            {currentUser.isAdmin && (
-              <Link 
-                to="/admin" 
-                className="admin-link"
-                style={{ 
-                  color: 'white',
-                  textDecoration: 'none',
-                  marginRight: '20px',
-                  fontWeight: '500'
-                }}
-              >
-                Админ-панель
-              </Link>
-            )}
-            <button 
-              className="logout-button" 
-              onClick={onLogout}
-              style={{ 
-                background: 'none',
-                border: 'none',
-                color: 'white',
-                fontSize: '1.4rem',
-                cursor: 'pointer'
-              }}
-            >
-              Выйти
-            </button>
-          </>
-        ) : (
-          <button 
-            className="auth-button" 
-            onClick={onAuthClick}
-            style={{ 
-              background: 'none',
-              border: 'none',
-              color: 'white',
-              fontSize: '1.4rem',
-              cursor: 'pointer'
-            }}
+    <AppBar position="static">
+      <Toolbar sx={{ justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <IconButton
+            edge="start"
+            color="inherit"
+            aria-label="menu"
+            onClick={handleMenuOpen}
+            sx={{ mr: 2 }}
           >
-            Войти
-          </button>
-        )}
-      </div>
-    </nav>
+            <MenuIcon />
+            <Typography variant="body1" sx={{ ml: 1 }}>Группы</Typography>
+          </IconButton>
+          
+          <Menu
+            anchorEl={anchorEl}
+            open={isMenuOpen}
+            onClose={handleMenuClose}
+          >
+            <ArtistMenu onClose={handleMenuClose} />
+          </Menu>
+        </Box>
+
+        <Typography 
+          variant="h6" 
+          component={Link} 
+          to="/" 
+          sx={{ 
+            flexGrow: 1, 
+            textAlign: 'center', 
+            textDecoration: 'none', 
+            color: 'inherit' 
+          }}
+        >
+          KpopShop
+        </Typography>
+
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {currentUser ? (
+            <>
+              {currentUser.isAdmin && (
+                <Button 
+                  component={Link}
+                  to="/admin"
+                  color="inherit"
+                  sx={{ mr: 2 }}
+                >
+                  Админ-панель
+                </Button>
+              )}
+              <Button 
+                color="inherit"
+                onClick={onLogout}
+              >
+                Выйти
+              </Button>
+            </>
+          ) : (
+            <Button 
+              color="inherit"
+              onClick={onAuthClick}
+            >
+              Войти
+            </Button>
+          )}
+        </Box>
+      </Toolbar>
+    </AppBar>
   );
 };
 

@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../../api';
-import './Product.css';
+import { 
+  Container, 
+  Typography, 
+  List, 
+  ListItem, 
+  ListItemText,
+  CircularProgress,
+  Alert,
+  Box
+} from '@mui/material';
 
 const Product = () => {
   const { id } = useParams();
@@ -23,30 +32,46 @@ const Product = () => {
     fetchAlbum();
   }, [id]);
 
-  if (loading) return <div className="loading">Загрузка...</div>;
-  if (error) return <div className="error">Ошибка: {error}</div>;
-  if (!album) return <div className="error">Альбом не найден</div>;
+  if (loading) return (
+    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+      <CircularProgress />
+    </Box>
+  );
+  
+  if (error) return <Alert severity="error">Ошибка: {error}</Alert>;
+  if (!album) return <Alert severity="warning">Альбом не найден</Alert>;
 
   return (
-    <div className="product-page">
-      <div className="product-info">
-        <h1>{album.title}</h1>
-        <h2>Исполнитель: {album.artist_name}</h2>
-        
-        <div className="version-info">
-          <h3>Информация о версиях:</h3>
-          <ul>
-            {album.versions?.map(version => (
-              <li key={version.id}>
-                {version.version_name} - ${version.price_diff}
-              </li>
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Typography variant="h3" gutterBottom>
+        {album.title}
+      </Typography>
+      <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+        Исполнитель: {album.artist_name}
+      </Typography>
+      
+      {album.versions?.length > 0 && (
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h6" gutterBottom>
+            Информация о версиях:
+          </Typography>
+          <List>
+            {album.versions.map(version => (
+              <ListItem key={version.id}>
+                <ListItemText 
+                  primary={version.version_name} 
+                  secondary={`$${version.price_diff}`} 
+                />
+              </ListItem>
             ))}
-          </ul>
-        </div>
+          </List>
+        </Box>
+      )}
 
-        <p className="description">{album.description}</p>
-      </div>
-    </div>
+      <Typography paragraph>
+        {album.description}
+      </Typography>
+    </Container>
   );
 };
 

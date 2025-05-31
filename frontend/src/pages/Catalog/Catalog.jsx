@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../../api'; 
-import './Catalog.css';
+import api from '../../api';
+import { 
+  Container, 
+  Typography, 
+  Grid, 
+  Card, 
+  CardContent,
+  CircularProgress,
+  Alert
+} from '@mui/material';
 
 const Catalog = () => {
   const [albums, setAlbums] = useState([]);
@@ -22,24 +30,40 @@ const Catalog = () => {
     fetchAlbums();
   }, []);
 
-  if (loading) return <div className="loading">Загрузка...</div>;
-  if (error) return <div className="error">Ошибка: {error}</div>;
+  if (loading) return (
+    <Container sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+      <CircularProgress />
+    </Container>
+  );
+  
+  if (error) return <Alert severity="error">Ошибка: {error}</Alert>;
 
   return (
-    <div className="catalog">
-      <h2>Каталог альбомов</h2>
-      <div className="album-grid">
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Typography variant="h4" gutterBottom>
+        Каталог альбомов
+      </Typography>
+      
+      <Grid container spacing={3}>
         {albums.map(album => (
-          <div key={album.id} className="album-card">
-            <Link to={`/album/${album.id}`}>
-              <h3>{album.title}</h3>
-              <p>Исполнитель: {album.artist}</p>
-              <p>Цена: ${album.base_price}</p>
-            </Link>
-          </div>
+          <Grid item xs={12} sm={6} md={4} key={album.id}>
+            <Card component={Link} to={`/album/${album.id}`} sx={{ textDecoration: 'none', height: '100%' }}>
+              <CardContent>
+                <Typography gutterBottom variant="h5" component="div">
+                  {album.title}
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
+                  Исполнитель: {album.artist}
+                </Typography>
+                <Typography variant="body1">
+                  Цена: ${album.base_price}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
         ))}
-      </div>
-    </div>
+      </Grid>
+    </Container>
   );
 };
 

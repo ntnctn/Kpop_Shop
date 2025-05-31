@@ -1,7 +1,18 @@
 import React, { useState } from 'react';
 import api from '../../api';
-import './PopupAuth.css';
 import PropTypes from 'prop-types';
+import {
+  Box, 
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  TextField,
+  Button,
+  Typography,
+  IconButton,
+  Alert
+} from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 
 const PopupAuth = ({ onClose, onLogin }) => {
   const [email, setEmail] = useState('');
@@ -11,26 +22,25 @@ const PopupAuth = ({ onClose, onLogin }) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
 
- const handleAuth = async (e, isRegistration) => {
-  e.preventDefault();
-  setError('');
+  const handleAuth = async (e, isRegistration) => {
+    e.preventDefault();
+    setError('');
 
-  try {
-    if (isRegistration) {
-      await api.register(email, password, firstName, lastName);
-      // После регистрации автоматически входим
-      const loginResponse = await api.login(email, password);
-      onLogin(loginResponse); // Передаем полный ответ
-    } else {
-      const loginResponse = await api.login(email, password);
-      onLogin(loginResponse); // Передаем полный ответ
+    try {
+      if (isRegistration) {
+        await api.register(email, password, firstName, lastName);
+        const loginResponse = await api.login(email, password);
+        onLogin(loginResponse);
+      } else {
+        const loginResponse = await api.login(email, password);
+        onLogin(loginResponse);
+      }
+      
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Ошибка авторизации');
     }
-    
-    onClose();
-  } catch (err) {
-    setError(err.message || 'Ошибка авторизации');
-  }
-};
+  };
 
   const toggleAuthMode = () => {
     setIsRegistering(!isRegistering);
@@ -38,74 +48,95 @@ const PopupAuth = ({ onClose, onLogin }) => {
   };
 
   return (
-    <div className="popup-overlay">
-      <div className="popup-auth">
-        <button className="close-btn" onClick={onClose}>×</button>
-        <h2>{isRegistering ? 'Регистрация' : 'Вход'}</h2>
-        
-        {error && <p className="error-message">{error}</p>}
+    <Dialog 
+      open 
+      onClose={onClose} 
+      maxWidth="xs" 
+      fullWidth
+      className="popup-auth-container"
+    >
+      <DialogTitle className="popup-auth-title">
+        {isRegistering ? 'Регистрация' : 'Вход'}
+        <IconButton
+          aria-label="close"
+          onClick={onClose}
+          className="popup-auth-close-btn"
+        >
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      
+      <DialogContent className="popup-auth-content">
+        <div className="popup-auth-content-inner">
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-        <form onSubmit={(e) => handleAuth(e, isRegistering)}>
-          {isRegistering && (
-            <>
-              <div className="form-group">
-                <label>Имя</label>
-                <input
-                  type="text"
-                  placeholder="Введите имя"
+          <Box 
+            component="form" 
+            onSubmit={(e) => handleAuth(e, isRegistering)}
+            className="popup-auth-form"
+          >
+            {isRegistering && (
+              <>
+                <TextField
+                  required
+                  fullWidth
+                  label="Имя"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  required
                 />
-              </div>
-              <div className="form-group">
-                <label>Фамилия</label>
-                <input
-                  type="text"
-                  placeholder="Введите фамилию"
+                <TextField
+                  fullWidth
+                  label="Фамилия"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                 />
-              </div>
-            </>
-          )}
+              </>
+            )}
 
-          <div className="form-group">
-            <label>Email</label>
-            <input
+            <TextField
+              required
+              fullWidth
+              label="Email"
               type="email"
-              placeholder="Введите email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
             />
-          </div>
 
-          <div className="form-group">
-            <label>Пароль</label>
-            <input
+            <TextField
+              required
+              fullWidth
+              label="Пароль"
               type="password"
-              placeholder="Введите пароль"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
+              inputProps={{ minLength: 6 }}
             />
-          </div>
 
-          <button type="submit" className="auth-button">
-            {isRegistering ? 'Зарегистрироваться' : 'Войти'}
-          </button>
-        </form>
+            <Box className="popup-auth-actions">
+              <Button 
+                type="submit" 
+                fullWidth 
+                variant="contained"
+              >
+                {isRegistering ? 'Зарегистрироваться' : 'Войти'}
+              </Button>
+            </Box>
+          </Box>
 
-        <div className="auth-toggle">
-          {isRegistering ? 'Уже есть аккаунт? ' : 'Нет аккаунта? '}
-          <button type="button" onClick={toggleAuthMode} className="toggle-button">
-            {isRegistering ? 'Войти' : 'Зарегистрироваться'}
-          </button>
+          <Typography variant="body2" className="popup-auth-toggle">
+            {isRegistering ? 'Уже есть аккаунт? ' : 'Нет аккаунта? '}
+            <Button 
+              color="primary" 
+              size="small" 
+              onClick={toggleAuthMode}
+              sx={{ textTransform: 'none' }}
+            >
+              {isRegistering ? 'Войти' : 'Зарегистрироваться'}
+            </Button>
+          </Typography>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
