@@ -6,10 +6,10 @@ const Home = () => {
     <Container maxWidth="md" sx={{ py: 8, textAlign: 'center' }}>
       <Box sx={{ my: 4 }}>
         <Typography variant="h2" component="h1" gutterBottom>
-          Добро пожаловать в KpopShop
+          Добро пожаловать в MagicShop
         </Typography>
         <Typography variant="h5" color="text.secondary">
-          Лучшие K-POP альбомы по доступным ценам
+          любите чонгука
         </Typography>
       </Box>
     </Container>

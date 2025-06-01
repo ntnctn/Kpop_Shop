@@ -314,6 +314,66 @@ def get_artist(artist_id):
         cur.close()
         conn.close()
 
+
+#sort albs
+
+@app.route('/api/artists/<int:artist_id>/albums', methods=['GET'])
+def get_artist_albums(artist_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Проверяем существование артиста
+        cur.execute('SELECT id FROM artists WHERE id = %s', (artist_id,))
+        if not cur.fetchone():
+            return jsonify({'error': 'Artist not found'}), 404
+
+        # Параметры запроса
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 10, type=int)
+        sort = request.args.get('sort', 'release_date_desc')
+        offset = (page - 1) * limit
+        
+        # Определяем сортировку
+        order_by = {
+            'release_date_desc': 'a.release_date DESC',
+            'release_date_asc': 'a.release_date ASC',
+            'price_asc': 'a.base_price ASC',
+            'price_desc': 'a.base_price DESC',
+            'title_asc': 'a.title ASC',
+            'title_desc': 'a.title DESC'
+        }.get(sort, 'a.release_date DESC')
+
+        # Основной запрос
+        cur.execute(f'''
+            SELECT a.*, ar.name as artist_name
+            FROM albums a
+            JOIN artists ar ON a.artist_id = ar.id
+            WHERE a.artist_id = %s
+            ORDER BY {order_by}
+            LIMIT %s OFFSET %s
+        ''', (artist_id, limit, offset))
+        albums = cur.fetchall()
+        
+        # Версии альбомов
+        for album in albums:
+            cur.execute('''
+                SELECT id, version_name, price_diff, stock_quantity
+                FROM album_versions
+                WHERE album_id = %s
+            ''', (album['id'],))
+            album['versions'] = cur.fetchall()
+        
+        return jsonify({
+            'albums': albums
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 @app.route('/api/cart/<int:item_id>', methods=['DELETE'])
 @jwt_required()
 def remove_from_cart(item_id):
@@ -954,8 +1014,37 @@ def remove_album_from_discount(discount_id, album_id):
     finally:
         cur.close()
         conn.close()
+    
+    
+    
+#скидки для страницы продукта    
         
+@app.route('/api/albums/<int:album_id>/discounts', methods=['GET'])
+def get_album_discounts(album_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Получаем активные скидки для альбома
+        cur.execute('''
+            SELECT d.* 
+            FROM discounts d
+            JOIN album_discounts ad ON d.id = ad.discount_id
+            WHERE ad.album_id = %s 
+            AND d.is_active = TRUE
+            AND d.start_date <= NOW() 
+            AND d.end_date >= NOW()
+        ''', (album_id,))
         
+        discounts = cur.fetchall()
+        return jsonify(discounts)
+        
+    except Exception as e:
+        app.logger.error(f"Get album discounts error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()        
         
 if __name__ == '__main__':
     app.run(debug=True)

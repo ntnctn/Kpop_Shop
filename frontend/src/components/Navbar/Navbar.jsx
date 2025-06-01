@@ -59,7 +59,7 @@ const Navbar = ({ currentUser, onAuthClick, onLogout }) => {
             color: 'inherit' 
           }}
         >
-          KpopShop
+          MagicShop
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
