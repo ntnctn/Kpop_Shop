@@ -37,7 +37,7 @@ DB_CONFIG = {
 def get_db_connection():
     return psycopg2.connect(**DB_CONFIG)
 
-# Универсальный обработчик CORS
+# Универсальный обработчик CORS, добавляет CORS-заголовки ко всем ответам сервера.
 @app.after_request
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
@@ -46,7 +46,7 @@ def add_cors_headers(response):
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     return response
 
-# Обработка OPTIONS запросов
+# Обработчики предварительных OPTIONS-запросов для CORS.
 @app.route('/api/register', methods=['OPTIONS'])
 def handle_register_options():
     return '', 200
@@ -65,7 +65,14 @@ def handle_admin_options():
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     return response
 
-# Регистрация пользователя
+
+# =============================================================================================
+# ============================== АУНТЕФИКАЦИЯ И ПОЛЬЗОВАТЕЛИ ==================================
+# =============================================================================================
+
+
+
+# Регистрация нового пользователя. Создает запись в БД, хеширует пароль, создает корзину.
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -115,7 +122,7 @@ def register():
         cur.close()
         conn.close()
 
-# Вход пользователя
+# Аутентификация пользователя. Проверяет email и пароль, возвращает JWT-токен.
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -189,8 +196,7 @@ def admin_required(fn):
             return jsonify({'message': 'Authorization failed'}), 401
     return wrapper
 
-
-
+# Проверяет валидность токена и возвращает информацию о пользователе.
 @app.route('/api/check-auth', methods=['GET'])
 @jwt_required()
 def check_auth():
@@ -202,8 +208,56 @@ def check_auth():
         'is_admin': claims.get('is_admin', False)
     })
 
+# Возвращает профиль текущего пользователя.
+@app.route('/api/profile', methods=['GET'])
+@jwt_required()
+def get_profile():
+    current_user = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        cur.execute('''
+            SELECT id, email, first_name, last_name, is_admin 
+            FROM users 
+            WHERE id = %s
+        ''', (current_user['id'],))
+        user = cur.fetchone()
+        
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+            
+        return jsonify({
+            'id': user['id'],
+            'email': user['email'],
+            'firstName': user['first_name'],
+            'lastName': user['last_name'],
+            'isAdmin': user['is_admin']
+        })
+        
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
-# Public routes
+# Просто проверяет валидность токена.
+@app.route('/api/validate-token', methods=['GET'])
+@jwt_required()
+def validate_token():
+    return jsonify({'valid': True}), 200
+
+
+
+# =============================================================================================
+# ==================================== ПУБЛИЧНЫЕ ==============================================
+# =============================================================================================
+
+
+# ---- АРТИСТЫ И АЛЬБОМЫ ---- 
+
+
+# Список всех альбомов с версиями (кроме отсутствующих).
 @app.route('/api/albums', methods=['GET'])
 def get_albums():
     conn = get_db_connection()
@@ -231,6 +285,7 @@ def get_albums():
     conn.close()
     return jsonify(albums)
 
+# Детальная информация об альбоме.
 @app.route('/api/albums/<int:album_id>', methods=['GET'])
 def get_album(album_id):
     conn = get_db_connection()
@@ -254,6 +309,7 @@ def get_album(album_id):
     conn.close()
     return jsonify(album)
 
+# Список артистов по категории (female_group, male_group, solo).
 @app.route('/api/artists/<category>', methods=['GET'])
 def get_artists_by_category(category):
     conn = get_db_connection()
@@ -270,6 +326,7 @@ def get_artists_by_category(category):
     conn.close()
     return jsonify(artists)
 
+# Список категорий артистов.
 @app.route('/api/artist_categories', methods=['GET'])
 def get_artist_categories():
     return jsonify([
@@ -278,6 +335,7 @@ def get_artist_categories():
         {'id': 'solo', 'name': 'Сольные исполнители'}
     ])
 
+# Информация об артисте и его альбомах.
 @app.route('/api/artists/<int:artist_id>', methods=['GET'])
 def get_artist(artist_id):
     conn = get_db_connection()
@@ -314,9 +372,7 @@ def get_artist(artist_id):
         cur.close()
         conn.close()
 
-
-#sort albs
-
+# Альбомы артиста с пагинацией и сортировкой.
 @app.route('/api/artists/<int:artist_id>/albums', methods=['GET'])
 def get_artist_albums(artist_id):
     conn = get_db_connection()
@@ -374,34 +430,44 @@ def get_artist_albums(artist_id):
         cur.close()
         conn.close()
 
-@app.route('/api/cart/<int:item_id>', methods=['DELETE'])
-@jwt_required()
-def remove_from_cart(item_id):
-    current_user = get_jwt_identity()
+
+
+# ---- СКИДКИ ---- 
+
+
+# Активные скидки для альбома       
+@app.route('/api/albums/<int:album_id>/discounts', methods=['GET'])
+def get_album_discounts(album_id):
     conn = get_db_connection()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
     
     try:
+        # Получаем активные скидки для альбома
         cur.execute('''
-            DELETE FROM cart_items 
-            WHERE id = %s AND cart_id IN (
-                SELECT id FROM cart WHERE user_id = %s
-            )
-            RETURNING *
-        ''', (item_id, current_user['id']))
+            SELECT d.* 
+            FROM discounts d
+            JOIN album_discounts ad ON d.id = ad.discount_id
+            WHERE ad.album_id = %s 
+            AND d.is_active = TRUE
+            AND d.start_date <= NOW() 
+            AND d.end_date >= NOW()
+        ''', (album_id,))
         
-        if not cur.fetchone():
-            return jsonify({'message': 'Item not found in your cart!'}), 404
-            
-        conn.commit()
-        return jsonify({'message': 'Item removed from cart!'})
+        discounts = cur.fetchall()
+        return jsonify(discounts)
+        
     except Exception as e:
-        conn.rollback()
-        return jsonify({'message': str(e)}), 400
+        app.logger.error(f"Get album discounts error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
     finally:
         cur.close()
-        conn.close()
+        conn.close()        
+ 
 
+# ---- КОРЗИНА ----  
+  
+
+# Получить содержимое корзины текущего пользователя.| Добавить товар в корзину или увеличить количество.
 @app.route('/api/cart', methods=['GET', 'POST'])
 @jwt_required()
 def cart_operations():
@@ -472,44 +538,47 @@ def cart_operations():
         cur.close()
         conn.close()
 
-@app.route('/api/profile', methods=['GET'])
+# Удалить товар из корзины.
+@app.route('/api/cart/<int:item_id>', methods=['DELETE'])
 @jwt_required()
-def get_profile():
+def remove_from_cart(item_id):
     current_user = get_jwt_identity()
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor()
     
     try:
         cur.execute('''
-            SELECT id, email, first_name, last_name, is_admin 
-            FROM users 
-            WHERE id = %s
-        ''', (current_user['id'],))
-        user = cur.fetchone()
+            DELETE FROM cart_items 
+            WHERE id = %s AND cart_id IN (
+                SELECT id FROM cart WHERE user_id = %s
+            )
+            RETURNING *
+        ''', (item_id, current_user['id']))
         
-        if not user:
-            return jsonify({'message': 'User not found'}), 404
+        if not cur.fetchone():
+            return jsonify({'message': 'Item not found in your cart!'}), 404
             
-        return jsonify({
-            'id': user['id'],
-            'email': user['email'],
-            'firstName': user['first_name'],
-            'lastName': user['last_name'],
-            'isAdmin': user['is_admin']
-        })
-        
+        conn.commit()
+        return jsonify({'message': 'Item removed from cart!'})
     except Exception as e:
-        return jsonify({'message': str(e)}), 500
+        conn.rollback()
+        return jsonify({'message': str(e)}), 400
     finally:
         cur.close()
         conn.close()
+ 
+  
+  
+# =============================================================================================
+# ==================================== АДМИНСКИЕ ==============================================
+# =============================================================================================
 
-@app.route('/api/validate-token', methods=['GET'])
-@jwt_required()
-def validate_token():
-    return jsonify({'valid': True}), 200
 
-# Admin routes
+
+# ---- АРТИСТЫ ----
+
+
+# Список всех артистов. | Создать нового артиста.
 @app.route('/api/admin/artists', methods=['GET', 'POST'])
 @jwt_required()
 @admin_required
@@ -546,6 +615,90 @@ def admin_artists():
         cur.close()
         conn.close()
 
+# Получить артиста по ID. | Обновить артиста.
+@app.route('/api/admin/artists/<int:id>', methods=['GET', 'PUT'])
+@jwt_required()
+@admin_required
+def admin_artist(id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        if request.method == 'GET':
+            cur.execute('SELECT * FROM artists WHERE id = %s', (id,))
+            artist = cur.fetchone()
+            if not artist:
+                return jsonify({'message': 'Artist not found'}), 404
+            return jsonify(artist)
+            
+        elif request.method == 'PUT':
+            data = request.get_json()
+            if not data or 'name' not in data or 'category' not in data:
+                return jsonify({'message': 'Name and category are required!'}), 400
+            
+            cur.execute(
+                "UPDATE artists SET name = %s, category = %s, description = %s, image_url = %s "
+                "WHERE id = %s RETURNING *",
+                (data['name'], data['category'], data.get('description'), data.get('image_url'), id)
+            )
+            updated_artist = cur.fetchone()
+            conn.commit()
+            
+            if not updated_artist:
+                return jsonify({'message': 'Artist not found'}), 404
+                
+            return jsonify(updated_artist)
+            
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Admin artist error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# Удалить артиста и все его альбомы.
+@app.route('/api/admin/artists/<int:id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_artist(id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Сначала удаляем все альбомы артиста (и их версии)
+        cur.execute('SELECT id FROM albums WHERE artist_id = %s', (id,))
+        album_ids = [row[0] for row in cur.fetchall()]
+        
+        for album_id in album_ids:
+            cur.execute('DELETE FROM album_versions WHERE album_id = %s', (album_id,))
+        
+        cur.execute('DELETE FROM albums WHERE artist_id = %s', (id,))
+        
+        # Затем удаляем самого артиста
+        cur.execute('DELETE FROM artists WHERE id = %s RETURNING id', (id,))
+        deleted = cur.fetchone()
+        
+        if not deleted:
+            conn.rollback()
+            return jsonify({'message': 'Artist not found'}), 404
+            
+        conn.commit()
+        return jsonify({'message': 'Artist and all related albums deleted successfully'}), 200
+        
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Delete artist error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ---- АЛЬБОМЫ ----
+
+
+# Список всех альбомов с версиями. | Создать новый альбом с версиями.
 @app.route('/api/admin/albums', methods=['GET', 'POST'])
 @jwt_required()
 @admin_required
@@ -631,51 +784,8 @@ def admin_albums():
         cur.close()
         conn.close()
         
-# Изменение артистов
 
-@app.route('/api/admin/artists/<int:id>', methods=['GET', 'PUT'])
-@jwt_required()
-@admin_required
-def admin_artist(id):
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    
-    try:
-        if request.method == 'GET':
-            cur.execute('SELECT * FROM artists WHERE id = %s', (id,))
-            artist = cur.fetchone()
-            if not artist:
-                return jsonify({'message': 'Artist not found'}), 404
-            return jsonify(artist)
-            
-        elif request.method == 'PUT':
-            data = request.get_json()
-            if not data or 'name' not in data or 'category' not in data:
-                return jsonify({'message': 'Name and category are required!'}), 400
-            
-            cur.execute(
-                "UPDATE artists SET name = %s, category = %s, description = %s, image_url = %s "
-                "WHERE id = %s RETURNING *",
-                (data['name'], data['category'], data.get('description'), data.get('image_url'), id)
-            )
-            updated_artist = cur.fetchone()
-            conn.commit()
-            
-            if not updated_artist:
-                return jsonify({'message': 'Artist not found'}), 404
-                
-            return jsonify(updated_artist)
-            
-    except Exception as e:
-        conn.rollback()
-        app.logger.error(f"Admin artist error: {str(e)}")
-        return jsonify({'message': str(e)}), 500
-    finally:
-        cur.close()
-        conn.close()
-
-# Изменение альбомов
-
+# Получить альбом по ID. | Обновить альбом и его версии.
 @app.route('/api/admin/albums/<int:id>', methods=['GET', 'PUT'])
 @jwt_required()
 @admin_required
@@ -773,46 +883,7 @@ def admin_album(id):
         conn.close()
 
 
-# Удаление артистов
-
-@app.route('/api/admin/artists/<int:id>', methods=['DELETE'])
-@jwt_required()
-@admin_required
-def delete_artist(id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    try:
-        # Сначала удаляем все альбомы артиста (и их версии)
-        cur.execute('SELECT id FROM albums WHERE artist_id = %s', (id,))
-        album_ids = [row[0] for row in cur.fetchall()]
-        
-        for album_id in album_ids:
-            cur.execute('DELETE FROM album_versions WHERE album_id = %s', (album_id,))
-        
-        cur.execute('DELETE FROM albums WHERE artist_id = %s', (id,))
-        
-        # Затем удаляем самого артиста
-        cur.execute('DELETE FROM artists WHERE id = %s RETURNING id', (id,))
-        deleted = cur.fetchone()
-        
-        if not deleted:
-            conn.rollback()
-            return jsonify({'message': 'Artist not found'}), 404
-            
-        conn.commit()
-        return jsonify({'message': 'Artist and all related albums deleted successfully'}), 200
-        
-    except Exception as e:
-        conn.rollback()
-        app.logger.error(f"Delete artist error: {str(e)}")
-        return jsonify({'message': str(e)}), 500
-    finally:
-        cur.close()
-        conn.close()
-
-# Удаление альбомов
-
+# Удалить альбом и все его версии.
 @app.route('/api/admin/albums/<int:id>', methods=['DELETE'])
 @jwt_required()
 @admin_required
@@ -843,9 +914,11 @@ def delete_album(id):
         cur.close()
         conn.close()
    
-   
+    
+# ---- СКИДКИ ----
 
-# Discount routes
+
+# Список всех скидок | Создать новую скидку
 @app.route('/api/admin/discounts', methods=['GET', 'POST'])
 @jwt_required()
 @admin_required
@@ -883,6 +956,7 @@ def admin_discounts():
         cur.close()
         conn.close()
 
+# Обновить скидку | Удалить скидку
 @app.route('/api/admin/discounts/<int:id>', methods=['PUT', 'DELETE'])
 @jwt_required()
 @admin_required
@@ -933,6 +1007,7 @@ def admin_discount(id):
         cur.close()
         conn.close()
 
+# Альбомы с данной скидкой | Добавить альбом к скидке
 @app.route('/api/admin/discounts/<int:discount_id>/albums', methods=['GET', 'POST'])
 @jwt_required()
 @admin_required
@@ -987,6 +1062,7 @@ def discount_albums(discount_id):
         cur.close()
         conn.close()
 
+# Удалить альбом из скидки
 @app.route('/api/admin/discounts/<int:discount_id>/albums/<int:album_id>', methods=['DELETE'])
 @jwt_required()
 @admin_required
@@ -1017,35 +1093,7 @@ def remove_album_from_discount(discount_id, album_id):
     
     
     
-#скидки для страницы продукта    
-        
-@app.route('/api/albums/<int:album_id>/discounts', methods=['GET'])
-def get_album_discounts(album_id):
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    
-    try:
-        # Получаем активные скидки для альбома
-        cur.execute('''
-            SELECT d.* 
-            FROM discounts d
-            JOIN album_discounts ad ON d.id = ad.discount_id
-            WHERE ad.album_id = %s 
-            AND d.is_active = TRUE
-            AND d.start_date <= NOW() 
-            AND d.end_date >= NOW()
-        ''', (album_id,))
-        
-        discounts = cur.fetchall()
-        return jsonify(discounts)
-        
-    except Exception as e:
-        app.logger.error(f"Get album discounts error: {str(e)}")
-        return jsonify({'message': str(e)}), 500
-    finally:
-        cur.close()
-        conn.close()        
-        
+      
 if __name__ == '__main__':
     app.run(debug=True)
     
