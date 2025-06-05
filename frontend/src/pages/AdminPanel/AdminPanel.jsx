@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, Button, CircularProgress, Paper, List, ListItem,
-  ListItemButton, ListItemText, Toolbar, Typography
+  ListItemButton, ListItemText, Toolbar, Typography,
+  Checkbox
 } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import AddIcon from '@mui/icons-material/Add';
@@ -53,9 +54,10 @@ const AdminPanel = () => {
           throw new Error('You do not have admin privileges');
         }
 
-        const [artistsRes, albumsRes] = await Promise.all([
+        const [artistsRes, albumsRes, usersRes] = await Promise.all([
           api.getAdminArtists(),
-          api.getAdminAlbums()
+          api.getAdminAlbums(),
+          api.getAllUsers()
         ]);
 
         const artistsWithCategory = artistsRes.data.map(artist => ({
@@ -65,6 +67,13 @@ const AdminPanel = () => {
 
         setArtists(artistsWithCategory);
         setAlbums(albumsRes.data);
+        setUsers(usersRes.data.users.map(user => ({
+        id: user.id,
+        email: user.email || '',
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        is_admin: user.is_admin || false
+      })));
 
       } catch (err) {
         setError(err.response?.data?.message || err.message);
@@ -237,6 +246,33 @@ const AdminPanel = () => {
     }
   };
 
+  //юзеры
+  const [users, setUsers] = useState([]);
+
+
+const handleToggleAdmin = async (userId, isAdmin) => {
+  try {
+    const response = await api.updateUser(userId, { is_admin: !isAdmin });
+    setUsers(users.map(u => u.id === userId ? { ...u, is_admin: !isAdmin } : u));
+  } catch (error) {
+    console.error('Error updating user:', error);
+    alert(`Ошибка обновления: ${error.response?.data?.message || error.message}`);
+  }
+};
+
+  const handleDeleteUser = async (userId) => {
+    try {
+      await api.deleteUser(userId);
+      setUsers(users.filter(u => u.id !== userId));
+      alert('Пользователь успешно удален!');
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert(`Ошибка удаления: ${error.response?.data?.message || error.message}`);
+    }
+  };
+
+
+
   // Подготовка данных для таблицы альбомов
   const preparedAlbums = albums.map(album => {
     const artist = artists.find(a => a.id === album.artist_id);
@@ -370,6 +406,57 @@ const AdminPanel = () => {
     },
   ];
 
+
+const userColumns = [
+  {
+    field: 'email',
+    headerName: 'Email',
+    width: 250,
+    sortable: true
+  },
+  {
+    field: 'first_name',
+    headerName: 'Имя',
+    width: 150,
+    sortable: true
+  },
+  {
+    field: 'last_name',
+    headerName: 'Фамилия',
+    width: 150,
+    sortable: true
+  },
+  {
+    field: 'is_admin',
+    headerName: 'Админ',
+    width: 120,
+    sortable: true,
+    renderCell: (params) => (
+      <Checkbox
+        checked={params.row.is_admin || false}
+        onChange={() => handleToggleAdmin(params.row.id, params.row.is_admin)}
+        color="primary"
+      />
+    )
+  },
+  {
+    field: 'actions',
+    headerName: 'Действия',
+    width: 150,
+    sortable: false,
+    renderCell: (params) => (
+      <Button
+        startIcon={<DeleteIcon />}
+        color="error"
+        onClick={() => handleDeleteUser(params.row.id)}
+      >
+        Удалить
+      </Button>
+    )
+  }
+];
+
+
   if (loading) {
     return (
       <div className="admin-panel-loading">
@@ -424,6 +511,15 @@ const AdminPanel = () => {
                   onClick={() => setTabValue('discounts')}
                 >
                   <ListItemText primary="Скидки" />
+                </ListItemButton>
+              </ListItem>
+
+              <ListItem disablePadding>
+                <ListItemButton
+                  selected={tabValue === 'users'}
+                  onClick={() => setTabValue('users')}
+                >
+                  <ListItemText primary="Пользователи" />
                 </ListItemButton>
               </ListItem>
             </List>
@@ -533,10 +629,36 @@ const AdminPanel = () => {
                     setDiscountFormOpen(true);
                   }}
                   onAddDiscount={() => {
-    setEditingDiscount(null); // Сбрасываем редактирование при добавлении
-    setDiscountFormOpen(true); // Открываем форму
-  }}
+                    setEditingDiscount(null); // Сбрасываем редактирование при добавлении
+                    setDiscountFormOpen(true); // Открываем форму
+                  }}
                 />
+              </Box>
+            )}
+
+            {tabValue === 'users' && (
+              <Box p={3} sx={{ height: '100%' }}>
+                <Toolbar className="admin-header">
+                  <Typography variant="h6" component="div" sx={{ flex: '1 1 100%' }}>
+                    Управление пользователями
+                  </Typography>
+                </Toolbar>
+                <Box sx={{ height: 600, width: '100%', mt: 2 }}>
+                  <DataGrid
+                    rows={users}
+                    columns={userColumns}
+                    initialState={{
+                      pagination: {
+                        paginationModel: {
+                          pageSize: 10,
+                        },
+                      },
+                    }}
+                    pageSizeOptions={[5, 10, 25]}
+                    disableRowSelectionOnClick
+                    getRowId={(row) => row.id}
+                  />
+                </Box>
               </Box>
             )}
           </Paper>
@@ -544,7 +666,7 @@ const AdminPanel = () => {
       </div>
 
       <div className="admin-panel">
-        {/* ... остальной код ... */}
+        {/* */}
 
         <ConfirmationDialog
           open={deleteConfirmOpen}
@@ -554,7 +676,9 @@ const AdminPanel = () => {
           message={
             deleteType === 'artist'
               ? `Вы уверены, что хотите удалить этого артиста и все его альбомы? Это действие нельзя отменить.`
-              : `Вы уверены, что хотите удалить этот альбом? Это действие нельзя отменить.`
+              : deleteType === 'album'
+                ? `Вы уверены, что хотите удалить этот альбом? Это действие нельзя отменить.`
+                : `Вы уверены, что хотите удалить этого пользователя? Это действие нельзя отменить.`
           }
         />
       </div>

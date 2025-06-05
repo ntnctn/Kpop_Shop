@@ -16,16 +16,16 @@ app = Flask(__name__)
 
 # Настройка логирования
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG, # Уровень логирования
+    format='%(asctime)s - %(levelname)s - %(message)s' # Формат сообщений
 )
 
-app.config['SECRET_KEY'] = 'your-secret-key-here'
-app.config['JWT_SECRET_KEY'] = 'your-jwt-secret-key'
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
-jwt = JWTManager(app)
+app.config['SECRET_KEY'] = 'your-secret-key-here' # Секретный ключ Flask
+app.config['JWT_SECRET_KEY'] = 'your-jwt-secret-key' # Секретный ключ для JWT
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24) # Время жизни токена
+jwt = JWTManager(app) # Инициализация JWT-менеджера
 
-# Database configuration
+# Конфигурация базы данных PostgreSQL
 DB_CONFIG = {
     'host': 'localhost',
     'database': 'kpop_shop',
@@ -35,7 +35,7 @@ DB_CONFIG = {
 }
 
 def get_db_connection():
-    return psycopg2.connect(**DB_CONFIG)
+    return psycopg2.connect(**DB_CONFIG) # Создает и возвращает соединение с базой данных
 
 # Универсальный обработчик CORS, добавляет CORS-заголовки ко всем ответам сервера.
 @app.after_request
@@ -66,6 +66,11 @@ def handle_admin_options():
     return response
 
 
+@app.route('/api/admin/users', methods=['OPTIONS'])
+@app.route('/api/admin/users/<int:user_id>', methods=['OPTIONS'])
+def handle_admin_users_options(user_id=None):
+    return '', 200
+
 # =============================================================================================
 # ============================== АУНТЕФИКАЦИЯ И ПОЛЬЗОВАТЕЛИ ==================================
 # =============================================================================================
@@ -75,8 +80,10 @@ def handle_admin_options():
 # Регистрация нового пользователя. Создает запись в БД, хеширует пароль, создает корзину.
 @app.route('/api/register', methods=['POST'])
 def register():
-    data = request.get_json()
+    data = request.get_json() # Регистрирует нового пользователя и создает для него корзину
     app.logger.debug(f"Registration data: {data}")
+    
+    # Валидация входных данных
     
     if not data or 'email' not in data or 'password' not in data:
         return jsonify({'message': 'Email and password are required!'}), 400
@@ -90,11 +97,12 @@ def register():
     cur = conn.cursor()
     
     try:
+        # Проверка на существующего пользователя
         cur.execute("SELECT id FROM users WHERE email = %s", (email,))
         if cur.fetchone():
             return jsonify({'message': 'Email already exists!'}), 400
         
-        hashed_password = generate_password_hash(password)
+        hashed_password = generate_password_hash(password) # Хеширование пароля
         
         cur.execute(
             "INSERT INTO users (email, password_hash, first_name, last_name, is_admin) "
@@ -103,6 +111,8 @@ def register():
         )
         user_id = cur.fetchone()[0]
         conn.commit()
+        
+        # Создание корзины для пользователя
         
         cur.execute("INSERT INTO cart (user_id) VALUES (%s) RETURNING id", (user_id,))
         cart_id = cur.fetchone()[0]
@@ -115,7 +125,7 @@ def register():
         }), 201
         
     except Exception as e:
-        conn.rollback()
+        conn.rollback() # Откат изменений при ошибке
         app.logger.error(f"Registration error: {str(e)}", exc_info=True)
         return jsonify({'message': 'Registration failed. Please try again.'}), 500
     finally:
@@ -178,12 +188,14 @@ def login():
         cur.close()
         conn.close()
 
+# Декоратор для проверки админских прав
+
 def admin_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         try:
             # Получаем claims из токена
-            claims = get_jwt()
+            claims = get_jwt() 
             
             # Проверяем is_admin в claims
             if not claims.get('is_admin', False):
@@ -259,10 +271,11 @@ def validate_token():
 
 # Список всех альбомов с версиями (кроме отсутствующих).
 @app.route('/api/albums', methods=['GET'])
-def get_albums():
+def get_albums(): # Возвращает список всех доступных альбомов с их версиями
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    
+     
+      # Основной запрос альбомов
     cur.execute('''
         SELECT a.id, ar.name as artist, a.title, a.base_price, 
                a.main_image_url, a.status, a.release_date
@@ -272,6 +285,8 @@ def get_albums():
         ORDER BY a.release_date DESC
     ''')
     albums = cur.fetchall()
+    
+    # Добавляем информацию о версиях для каждого альбома
     
     for album in albums:
         cur.execute('''
@@ -582,18 +597,20 @@ def remove_from_cart(item_id):
 @app.route('/api/admin/artists', methods=['GET', 'POST'])
 @jwt_required()
 @admin_required
-def admin_artists():
+def admin_artists(): # Управление артистами: GET - список, POST - создание
     current_user = get_jwt_identity()
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     try:
         if request.method == 'GET':
+            # Получение списка всех артистов
             cur.execute('SELECT * FROM artists')
             artists = cur.fetchall()
             return jsonify(artists)
         
         elif request.method == 'POST':
+            # Создание нового артиста
             data = request.get_json()
             if not data or 'name' not in data or 'category' not in data:
                 return jsonify({'message': 'Name and category are required!'}), 400
@@ -1091,7 +1108,193 @@ def remove_album_from_discount(discount_id, album_id):
         cur.close()
         conn.close()
     
+
+
+# =============================================================================================
+# ============================== АДМИНСКОЕ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ ==============================
+# =============================================================================================
+
+# Получить список всех пользователей
+@app.route('/api/admin/users', methods=['GET'])
+@jwt_required()
+@admin_required
+def get_all_users():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
     
+    try:
+        # Получаем параметры пагинации из запроса
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        offset = (page - 1) * per_page
+        
+        # Основной запрос пользователей
+        cur.execute('''
+            SELECT id, email, first_name, last_name, is_admin, is_active, created_at
+            FROM users
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        ''', (per_page, offset))
+        users = cur.fetchall()
+        
+        # Получаем общее количество пользователей для пагинации
+        cur.execute('SELECT COUNT(*) FROM users')
+        total_users = cur.fetchone()['count']
+        
+        return jsonify({
+            'users': users,
+            'total': total_users,
+            'page': page,
+            'per_page': per_page
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Get all users error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# Получить информацию о конкретном пользователе
+@app.route('/api/admin/users/<int:user_id>', methods=['GET'])
+@jwt_required()
+@admin_required
+def get_user(user_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        cur.execute('''
+            SELECT id, email, first_name, last_name, is_admin, is_active, created_at
+            FROM users
+            WHERE id = %s
+        ''', (user_id,))
+        user = cur.fetchone()
+        
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+            
+        return jsonify(user)
+        
+    except Exception as e:
+        app.logger.error(f"Get user error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# Обновить информацию о пользователе
+@app.route('/api/admin/users/<int:user_id>', methods=['PUT'])
+@jwt_required()
+@admin_required
+def update_user(user_id):
+    data = request.get_json()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Проверяем существование пользователя
+        cur.execute('SELECT id FROM users WHERE id = %s', (user_id,))
+        if not cur.fetchone():
+            return jsonify({'message': 'User not found'}), 404
+        
+        # Обновляем только те поля, которые были переданы
+        update_fields = []
+        update_values = []
+        
+        if 'email' in data:
+            update_fields.append("email = %s")
+            update_values.append(data['email'])
+            
+        if 'first_name' in data:
+            update_fields.append("first_name = %s")
+            update_values.append(data['first_name'])
+            
+        if 'last_name' in data:
+            update_fields.append("last_name = %s")
+            update_values.append(data['last_name'])
+            
+        if 'is_admin' in data:
+            update_fields.append("is_admin = %s")
+            update_values.append(data['is_admin'])
+            
+        if 'is_active' in data:
+            update_fields.append("is_active = %s")
+            update_values.append(data['is_active'])
+            
+        if 'password' in data and data['password']:
+            hashed_password = generate_password_hash(data['password'])
+            update_fields.append("password_hash = %s")
+            update_values.append(hashed_password)
+        
+        if not update_fields:
+            return jsonify({'message': 'No fields to update'}), 400
+            
+        update_values.append(user_id)
+        
+        update_query = f'''
+            UPDATE users 
+            SET {', '.join(update_fields)}
+            WHERE id = %s
+            RETURNING id, email, first_name, last_name, is_admin, is_active
+        '''
+        
+        cur.execute(update_query, update_values)
+        updated_user = cur.fetchone()
+        conn.commit()
+        
+        return jsonify(updated_user)
+        
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Update user error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# Удалить пользователя
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_user(user_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Проверяем существование пользователя
+        cur.execute('SELECT id FROM users WHERE id = %s', (user_id,))
+        if not cur.fetchone():
+            return jsonify({'message': 'User not found'}), 404
+        
+        # Сначала удаляем связанные данные (корзину, заказы и т.д.)
+        # Удаляем корзину пользователя и ее содержимое
+        cur.execute('DELETE FROM cart_items WHERE cart_id IN (SELECT id FROM cart WHERE user_id = %s)', (user_id,))
+        cur.execute('DELETE FROM cart WHERE user_id = %s', (user_id,))
+        
+        # Удаляем адреса пользователя
+        cur.execute('DELETE FROM user_addresses WHERE user_id = %s', (user_id,))
+        
+        # Удаляем вишлист пользователя
+        cur.execute('DELETE FROM wishlist WHERE user_id = %s', (user_id,))
+        
+        # Затем удаляем самого пользователя
+        cur.execute('DELETE FROM users WHERE id = %s RETURNING id', (user_id,))
+        deleted = cur.fetchone()
+        conn.commit()
+        
+        if not deleted:
+            return jsonify({'message': 'User not found'}), 404
+            
+        return jsonify({'message': 'User deleted successfully'}), 200
+        
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Delete user error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()  
     
       
 if __name__ == '__main__':

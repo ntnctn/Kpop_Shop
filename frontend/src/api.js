@@ -59,6 +59,16 @@ export default {
     return apiInstance.get('/artist_categories');
   },
 
+
+// Админские методы для управления пользователями
+getAllUsers: (params = {}) => apiInstance.get('/admin/users', { params }),
+getUserById: (userId) => apiInstance.get(`/admin/users/${userId}`),
+updateUser: (userId, userData) => apiInstance.put(`/admin/users/${userId}`, userData),
+deleteUser: (userId) => apiInstance.delete(`/admin/users/${userId}`),
+
+
+
+  
   // НОВЫЕ АДМИНСКИЕ МЕТОДЫ
   getAdminAlbums: () => apiInstance.get('/admin/albums'),
   createAlbum: (albumData) => apiInstance.post('/admin/albums', albumData),
@@ -110,6 +120,7 @@ export default {
       throw error;
     }
   },
+
   deleteAlbum: async (id) => {
     try {
       const response = await apiInstance.delete(`/admin/albums/${id}`);
@@ -120,7 +131,24 @@ export default {
     }
   },
 
-
+deleteUser: async (userId) => {
+  try {
+    const response = await apiInstance.delete(`/admin/users/${userId}`);
+    return response;
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    throw error;
+  }
+},
+updateUser: async (userId, userData) => {
+  try {
+    const response = await apiInstance.put(`/admin/users/${userId}`, userData);
+    return response;
+  } catch (error) {
+    console.error('Error updating user:', error);
+    throw error;
+  }
+},
   // Скидки для админской панели
   getDiscounts: () => apiInstance.get('/admin/discounts'),
   createDiscount: (discountData) => apiInstance.post('/admin/discounts', discountData),

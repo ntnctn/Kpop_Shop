@@ -23,7 +23,7 @@ const [isAuthPopupOpen, setAuthPopupOpen] = useState(false);
       if (token && userData) {
         // Проверка валидности токена
         try {
-          await apiInstance.get('/api/validate-token'); // Добавьте этот эндпоинт на сервере
+          await apiInstance.get('/api/validate-token'); 
           setCurrentUser(userData);
         } catch (error) {
           localStorage.removeItem('token');
@@ -36,7 +36,7 @@ const [isAuthPopupOpen, setAuthPopupOpen] = useState(false);
 
   const handleLogin = async (responseData) => {
   try {
-    console.log('Raw response data:', responseData); // Добавьте это для отладки
+    console.log('Raw response data:', responseData); // Для отладки
     
     // Проверяем новую структуру ответа
     if (responseData.accessToken && responseData.user) {
