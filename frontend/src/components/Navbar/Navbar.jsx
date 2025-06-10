@@ -14,7 +14,15 @@ import MenuIcon from '@mui/icons-material/Menu';
 
 const Navbar = ({ currentUser, onAuthClick, onLogout }) => {
   const [anchorEl, setAnchorEl] = useState(null);
+  const [menuPreloaded, setMenuPreloaded] = useState(false);
   const isMenuOpen = Boolean(anchorEl);
+
+  // Предзагрузка данных при наведении
+  const handleMenuHover = () => {
+    if (!menuPreloaded) {
+      setMenuPreloaded(true);
+    }
+  };
 
   const handleMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
@@ -33,6 +41,7 @@ const Navbar = ({ currentUser, onAuthClick, onLogout }) => {
             color="inherit"
             aria-label="menu"
             onClick={handleMenuOpen}
+            onMouseEnter={handleMenuHover} // Обработчик наведения
             sx={{ mr: 2 }}
           >
             <MenuIcon />
@@ -43,8 +52,13 @@ const Navbar = ({ currentUser, onAuthClick, onLogout }) => {
             anchorEl={anchorEl}
             open={isMenuOpen}
             onClose={handleMenuClose}
+            // Небольшая задержка перед закрытием для плавности
+            TransitionProps={{ timeout: 150 }}
           >
-            <ArtistMenu onClose={handleMenuClose} />
+            <ArtistMenu 
+              onClose={handleMenuClose} 
+              preloaded={menuPreloaded} // Флаг предзагрузки
+            />
           </Menu>
         </Box>
 

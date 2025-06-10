@@ -12,63 +12,73 @@ import {
   ListItemButton,
   ListItemText,
   Typography,
-  Alert
+  Alert, 
+  Skeleton
 } from '@mui/material';
 import { Close as CloseIcon, ExpandMore as ExpandMoreIcon, ChevronRight as ChevronRightIcon } from '@mui/icons-material';
-
-const ArtistMenu = ({ onClose }) => {
+const ArtistMenu = ({ onClose, preloaded }) => {
   const [categories, setCategories] = useState([]);
   const [artists, setArtists] = useState({});
   const [expandedCategory, setExpandedCategory] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!preloaded); // Если предзагружено, не показываем загрузку
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchData = async () => {
       try {
-        const response = await api.getArtistCategories();
-        setCategories(response.data);
+        // Загружаем категории
+        const categoriesResponse = await api.getArtistCategories();
+        setCategories(categoriesResponse.data);
+        
+        // Если предзагрузка активна, загружаем всех артистов сразу
+        if (preloaded) {
+          const allArtists = {};
+          for (const category of categoriesResponse.data) {
+            const artistsResponse = await api.getArtistsByCategory(category.id);
+            allArtists[category.id] = artistsResponse.data;
+          }
+          setArtists(allArtists);
+        }
       } catch (err) {
         setError(err.message);
-        console.error('Error fetching categories:', err);
+        console.error('Error fetching data:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCategories();
-  }, []);
+    fetchData();
+  }, [preloaded]);
 
-  const loadArtists = async (categoryId) => {
-    if (!artists[categoryId]) {
-      try {
-        const response = await api.getArtistsByCategory(categoryId);
-        setArtists(prev => ({
-          ...prev,
-          [categoryId]: response.data
-        }));
-      } catch (err) {
-        console.error(`Error fetching artists for category ${categoryId}:`, err);
-        setArtists(prev => ({
-          ...prev,
-          [categoryId]: []
-        }));
-      }
-    }
-  };
-
-  const handleCategoryClick = (categoryId) => {
+  // Загружаем артистов для категории при необходимости
+  const handleCategoryClick = async (categoryId) => {
     if (expandedCategory === categoryId) {
       setExpandedCategory(null);
     } else {
-      loadArtists(categoryId);
+      if (!artists[categoryId] && !preloaded) {
+        try {
+          const response = await api.getArtistsByCategory(categoryId);
+          setArtists(prev => ({
+            ...prev,
+            [categoryId]: response.data
+          }));
+        } catch (err) {
+          console.error(`Error fetching artists for category ${categoryId}:`, err);
+          setArtists(prev => ({
+            ...prev,
+            [categoryId]: []
+          }));
+        }
+      }
       setExpandedCategory(categoryId);
     }
   };
 
   if (loading) return (
-    <Box display="flex" justifyContent="center" p={3}>
-      <CircularProgress />
+    <Box p={2}>
+      {[...Array(5)].map((_, i) => (
+        <Skeleton key={i} variant="rectangular" height={40} sx={{ mb: 1 }} />
+      ))}
     </Box>
   );
 
