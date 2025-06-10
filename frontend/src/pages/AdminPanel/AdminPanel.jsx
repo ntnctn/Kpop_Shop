@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Box, Button, CircularProgress, Paper, List, ListItem,
   ListItemButton, ListItemText, Toolbar, Typography,
-  Checkbox
+  Checkbox, Select, MenuItem, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow
 } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import AddIcon from '@mui/icons-material/Add';
@@ -16,6 +17,7 @@ import { ArtistForm } from '../../components/ArtistForm/ArtistForm';
 import { formatDateForInput, formatDateForServer } from '../../utils/dateFormatter';
 import { ConfirmationDialog } from '../../components/ConfirmationDialog/ConfirmationDialog';
 import { DiscountsTable } from '../../components/DiscountsTable/DiscountsTable';
+import { OrdersTable } from '../../components/OrdersTable/OrdersTable';
 import './AdminPanel.css';
 
 const AdminPanel = () => {
@@ -54,26 +56,43 @@ const AdminPanel = () => {
           throw new Error('You do not have admin privileges');
         }
 
-        const [artistsRes, albumsRes, usersRes] = await Promise.all([
+        const [artistsRes, albumsRes, usersRes, ordersRes] = await Promise.all([
           api.getAdminArtists(),
           api.getAdminAlbums(),
-          api.getAllUsers()
+          api.getAllUsers(),
+          api.getAllOrders()
         ]);
 
-        const artistsWithCategory = artistsRes.data.map(artist => ({
+        const safeOrders = (ordersRes.data?.orders || []).map(order => ({
+          
+          id: order?.id || 0,
+          user_email: order?.user_email || 'Неизвестный пользователь',
+          total_amount: order?.total_amount || 0,
+          status: order?.status || 'created',
+          created_at: order?.created_at || null,
+          items: order?.items?.map(item => ({
+            id: item?.id || 0,
+            album_title: item?.album_title || 'Неизвестный альбом',
+            version_name: item?.version_name || 'Стандарт',
+            quantity: item?.quantity || 0,
+            price_per_unit: item?.price_per_unit || 0
+          })) || []
+        }));
+        
+
+        setArtists(artistsRes.data.map(artist => ({
           ...artist,
           category: artist.category || 'other'
-        }));
-
-        setArtists(artistsWithCategory);
+        })));
         setAlbums(albumsRes.data);
         setUsers(usersRes.data.users.map(user => ({
-        id: user.id,
-        email: user.email || '',
-        first_name: user.first_name || '',
-        last_name: user.last_name || '',
-        is_admin: user.is_admin || false
-      })));
+          id: user.id,
+          email: user.email || '',
+          first_name: user.first_name || '',
+          last_name: user.last_name || '',
+          is_admin: user.is_admin || false
+        })));
+        setOrders(safeOrders);
 
       } catch (err) {
         setError(err.response?.data?.message || err.message);
@@ -249,16 +268,17 @@ const AdminPanel = () => {
   //юзеры
   const [users, setUsers] = useState([]);
 
+  const [orders, setOrders] = useState([]);
 
-const handleToggleAdmin = async (userId, isAdmin) => {
-  try {
-    const response = await api.updateUser(userId, { is_admin: !isAdmin });
-    setUsers(users.map(u => u.id === userId ? { ...u, is_admin: !isAdmin } : u));
-  } catch (error) {
-    console.error('Error updating user:', error);
-    alert(`Ошибка обновления: ${error.response?.data?.message || error.message}`);
-  }
-};
+  const handleToggleAdmin = async (userId, isAdmin) => {
+    try {
+      const response = await api.updateUser(userId, { is_admin: !isAdmin });
+      setUsers(users.map(u => u.id === userId ? { ...u, is_admin: !isAdmin } : u));
+    } catch (error) {
+      console.error('Error updating user:', error);
+      alert(`Ошибка обновления: ${error.response?.data?.message || error.message}`);
+    }
+  };
 
   const handleDeleteUser = async (userId) => {
     try {
@@ -271,7 +291,28 @@ const handleToggleAdmin = async (userId, isAdmin) => {
     }
   };
 
+  const handleStatusChange = async (orderId, newStatus) => {
+    try {
+      const response = await api.updateOrderStatus(orderId, { status: newStatus });
+      setOrders(orders.map(order =>
+        order.id === orderId ? { ...order, status: newStatus } : order
+      ));
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      alert(`Ошибка обновления: ${error.response?.data?.message || error.message}`);
+    }
+  };
 
+  const handleDeleteOrder = async (orderId) => {
+    try {
+      await api.deleteOrder(orderId);
+      setOrders(orders.filter(order => order.id !== orderId));
+      alert('Заказ успешно удален!');
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      alert(`Ошибка удаления: ${error.response?.data?.message || error.message}`);
+    }
+  };
 
   // Подготовка данных для таблицы альбомов
   const preparedAlbums = albums.map(album => {
@@ -407,54 +448,55 @@ const handleToggleAdmin = async (userId, isAdmin) => {
   ];
 
 
-const userColumns = [
-  {
-    field: 'email',
-    headerName: 'Email',
-    width: 250,
-    sortable: true
-  },
-  {
-    field: 'first_name',
-    headerName: 'Имя',
-    width: 150,
-    sortable: true
-  },
-  {
-    field: 'last_name',
-    headerName: 'Фамилия',
-    width: 150,
-    sortable: true
-  },
-  {
-    field: 'is_admin',
-    headerName: 'Админ',
-    width: 120,
-    sortable: true,
-    renderCell: (params) => (
-      <Checkbox
-        checked={params.row.is_admin || false}
-        onChange={() => handleToggleAdmin(params.row.id, params.row.is_admin)}
-        color="primary"
-      />
-    )
-  },
-  {
-    field: 'actions',
-    headerName: 'Действия',
-    width: 150,
-    sortable: false,
-    renderCell: (params) => (
-      <Button
-        startIcon={<DeleteIcon />}
-        color="error"
-        onClick={() => handleDeleteUser(params.row.id)}
-      >
-        Удалить
-      </Button>
-    )
-  }
-];
+
+  const userColumns = [
+    {
+      field: 'email',
+      headerName: 'Email',
+      width: 250,
+      sortable: true
+    },
+    {
+      field: 'first_name',
+      headerName: 'Имя',
+      width: 150,
+      sortable: true
+    },
+    {
+      field: 'last_name',
+      headerName: 'Фамилия',
+      width: 150,
+      sortable: true
+    },
+    {
+      field: 'is_admin',
+      headerName: 'Админ',
+      width: 120,
+      sortable: true,
+      renderCell: (params) => (
+        <Checkbox
+          checked={params.row.is_admin || false}
+          onChange={() => handleToggleAdmin(params.row.id, params.row.is_admin)}
+          color="primary"
+        />
+      )
+    },
+    {
+      field: 'actions',
+      headerName: 'Действия',
+      width: 150,
+      sortable: false,
+      renderCell: (params) => (
+        <Button
+          startIcon={<DeleteIcon />}
+          color="error"
+          onClick={() => handleDeleteUser(params.row.id)}
+        >
+          Удалить
+        </Button>
+      )
+    }
+  ];
 
 
   if (loading) {
@@ -489,6 +531,7 @@ const userColumns = [
         <div className="admin-menu">
           <Paper elevation={3}>
             <List>
+
               <ListItem disablePadding>
                 <ListItemButton
                   selected={tabValue === 'albums'}
@@ -497,6 +540,7 @@ const userColumns = [
                   <ListItemText primary="Альбомы" />
                 </ListItemButton>
               </ListItem>
+
               <ListItem disablePadding>
                 <ListItemButton
                   selected={tabValue === 'artists'}
@@ -505,6 +549,7 @@ const userColumns = [
                   <ListItemText primary="Артисты" />
                 </ListItemButton>
               </ListItem>
+
               <ListItem disablePadding>
                 <ListItemButton
                   selected={tabValue === 'discounts'}
@@ -522,6 +567,16 @@ const userColumns = [
                   <ListItemText primary="Пользователи" />
                 </ListItemButton>
               </ListItem>
+
+              <ListItem disablePadding>
+                <ListItemButton
+                  selected={tabValue === 'orders'}
+                  onClick={() => setTabValue('orders')}
+                >
+                  <ListItemText primary="Заказы" />
+                </ListItemButton>
+              </ListItem>
+
             </List>
           </Paper>
         </div>
@@ -636,6 +691,8 @@ const userColumns = [
               </Box>
             )}
 
+
+
             {tabValue === 'users' && (
               <Box p={3} sx={{ height: '100%' }}>
                 <Toolbar className="admin-header">
@@ -661,6 +718,24 @@ const userColumns = [
                 </Box>
               </Box>
             )}
+
+
+            {tabValue === 'orders' && (
+              <Box p={3} sx={{ height: '100%' }}>
+                <Toolbar className="admin-header">
+                  <Typography variant="h6" component="div" sx={{ flex: '1 1 100%' }}>
+                    Управление заказами
+                  </Typography>
+                </Toolbar>
+                <OrdersTable
+                  orders={orders}
+                  onStatusChange={handleStatusChange}
+                  onDelete={handleDeleteOrder}
+                />
+              </Box>
+            )}
+
+
           </Paper>
         </div>
       </div>

@@ -71,6 +71,19 @@ def handle_admin_options():
 def handle_admin_users_options(user_id=None):
     return '', 200
 
+
+@app.route('/api/admin/orders', methods=['OPTIONS'])
+def handle_orders_options():
+    response = make_response()
+    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    return response
+@app.route('/api/admin/orders/<int:order_id>', methods=['OPTIONS'])
+def handle_admin_orders_options(order_id=None):
+    return '', 200
+
 # =============================================================================================
 # ============================== АУНТЕФИКАЦИЯ И ПОЛЬЗОВАТЕЛИ ==================================
 # =============================================================================================
@@ -1296,6 +1309,206 @@ def delete_user(user_id):
         cur.close()
         conn.close()  
     
+
+# =============================================================================================
+# ============================== АДМИНСКОЕ ДЛЯ ЗАКАЗОВ ====================================
+# =============================================================================================
+
+# Получить список всех заказов с товарами
+@app.route('/api/admin/orders', methods=['GET'])
+@jwt_required()
+@admin_required
+def get_all_orders():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Получаем параметры пагинации
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        offset = (page - 1) * per_page
+        
+        # Основной запрос заказов
+        cur.execute('''
+    SELECT o.*, u.email as user_email, 
+           CONCAT(u.first_name, ' ', u.last_name) as user_full_name
+    FROM orders o
+    JOIN users u ON o.user_id = u.id
+    LEFT JOIN user_addresses ua ON o.address_id = ua.id
+    ORDER BY o.created_at DESC
+    LIMIT %s OFFSET %s
+''', (per_page, offset))
+        orders = cur.fetchall()
+        
+        # Получаем товары для каждого заказа
+        for order in orders:
+            cur.execute('''
+                SELECT oi.*, av.version_name as current_version_name,
+                       a.title as album_title, ar.name as artist_name
+                FROM order_items oi
+                JOIN album_versions av ON oi.album_version_id = av.id
+                JOIN albums a ON av.album_id = a.id
+                JOIN artists ar ON a.artist_id = ar.id
+                WHERE oi.order_id = %s
+            ''', (order['id'],))
+            order['items'] = cur.fetchall()
+        
+        # Получаем общее количество заказов
+        cur.execute('SELECT COUNT(*) FROM orders')
+        total_orders = cur.fetchone()['count']
+        
+        return jsonify({
+            'orders': orders,
+            'total': total_orders,
+            'page': page,
+            'per_page': per_page
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Get all orders error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# Получить детальную информацию о заказе
+@app.route('/api/admin/orders/<int:order_id>', methods=['GET'])
+@jwt_required()
+@admin_required
+def get_order(order_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Получаем основную информацию о заказе
+        cur.execute('''
+    SELECT o.*, u.email as user_email, 
+           CONCAT(u.first_name, ' ', u.last_name) as user_full_name,
+           ua.country, ua.city, ua.postal_code, ua.street, 
+           ua.house, ua.apartment
+    FROM orders o
+    JOIN users u ON o.user_id = u.id
+    LEFT JOIN user_addresses ua ON o.address_id = ua.id
+    WHERE o.id = %s
+''', (order_id,))
+        order = cur.fetchone()
+        
+        if not order:
+            return jsonify({'message': 'Order not found'}), 404
+        
+        # Получаем товары в заказе
+        cur.execute('''
+            SELECT oi.*, av.version_name as current_version_name,
+                   a.title as album_title, a.main_image_url,
+                   ar.name as artist_name
+            FROM order_items oi
+            JOIN album_versions av ON oi.album_version_id = av.id
+            JOIN albums a ON av.album_id = a.id
+            JOIN artists ar ON a.artist_id = ar.id
+            WHERE oi.order_id = %s
+        ''', (order_id,))
+        order['items'] = cur.fetchall()
+        
+        return jsonify(order)
+        
+    except Exception as e:
+        app.logger.error(f"Get order error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# Обновить статус заказа
+@app.route('/api/admin/orders/<int:order_id>/status', methods=['PUT'])
+@jwt_required()
+@admin_required
+def update_order_status(order_id):
+    data = request.get_json()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    if not data or 'status' not in data:
+        return jsonify({'message': 'Status is required'}), 400
+    
+    valid_statuses = ['created', 'paid', 'shipped', 'delivered', 'cancelled']
+    if data['status'] not in valid_statuses:
+        return jsonify({'message': 'Invalid status'}), 400
+    
+    try:
+        # Проверяем существование заказа
+        cur.execute('SELECT id, status FROM orders WHERE id = %s', (order_id,))
+        order = cur.fetchone()
+        if not order:
+            return jsonify({'message': 'Order not found'}), 404
+        
+        # Подготовка данных для обновления
+        update_fields = ["status = %s"]
+        update_values = [data['status']]
+        
+        # Если статус меняется на paid, устанавливаем paid_at
+        if data['status'] == 'paid' and order['status'] != 'paid':
+            update_fields.append("paid_at = NOW()")
+        
+        # Если добавляется tracking_number
+        if 'tracking_number' in data:
+            update_fields.append("tracking_number = %s")
+            update_values.append(data['tracking_number'])
+        
+        update_values.append(order_id)
+        
+        # Выполняем обновление
+        update_query = f'''
+            UPDATE orders 
+            SET {', '.join(update_fields)}
+            WHERE id = %s
+            RETURNING *
+        '''
+        
+        cur.execute(update_query, update_values)
+        updated_order = cur.fetchone()
+        conn.commit()
+        
+        return jsonify(updated_order)
+        
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Update order status error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# Удалить заказ
+@app.route('/api/admin/orders/<int:order_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_order(order_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Сначала удаляем товары заказа
+        cur.execute('DELETE FROM order_items WHERE order_id = %s', (order_id,))
+        
+        # Затем удаляем сам заказ
+        cur.execute('DELETE FROM orders WHERE id = %s RETURNING id', (order_id,))
+        deleted = cur.fetchone()
+        conn.commit()
+        
+        if not deleted:
+            return jsonify({'message': 'Order not found'}), 404
+            
+        return jsonify({'message': 'Order deleted successfully'}), 200
+        
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Delete order error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
       
 if __name__ == '__main__':
     app.run(debug=True)

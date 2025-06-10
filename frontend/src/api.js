@@ -162,6 +162,42 @@ updateUser: async (userId, userData) => {
 
 getAlbumDiscounts: (albumId) => apiInstance.get(`/albums/${albumId}/discounts`),
 
+
+
+
+
+// Админские методы для управления заказами
+getAllOrders: (params = {}) => apiInstance.get('/admin/orders', { params }),
+getOrderById: (orderId) => apiInstance.get(`/admin/orders/${orderId}`),
+updateOrderStatus: (orderId, statusData) => apiInstance.put(`/admin/orders/${orderId}/status`, statusData),
+deleteOrder: (orderId) => apiInstance.delete(`/admin/orders/${orderId}`),
+
+// С обработкой ошибок:
+deleteOrder: async (orderId) => {
+  try {
+    const response = await apiInstance.delete(`/admin/orders/${orderId}`);
+    return response;
+  } catch (error) {
+    console.error('Error deleting order:', error);
+    throw error;
+  }
+},
+updateOrderStatus: async (orderId, statusData) => {
+  try {
+    const response = await apiInstance.put(`/admin/orders/${orderId}/status`, statusData);
+    return response;
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    throw error;
+  }
+},
+
+
+
+
+
+
+
   // Изменяем функцию регистрации
   // Исправляем запрос регистрации
   register: async (email, password, firstName, lastName) => {
