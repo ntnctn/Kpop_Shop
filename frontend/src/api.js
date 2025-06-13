@@ -96,10 +96,19 @@ deleteUser: (userId) => apiInstance.delete(`/admin/users/${userId}`),
 
 
   createArtist: (artistData) => apiInstance.post('/admin/artists', artistData),
+  
+  
+  
   // Метод для валидации токена
   validateToken: () => apiInstance.get('/api/validate-token'),
 
 
+
+
+
+
+
+  
   // Новые методы для редактирования
   updateArtist: (id, artistData) => apiInstance.put(`/admin/artists/${id}`, artistData),
   updateAlbum: (id, albumData) => apiInstance.put(`/admin/albums/${id}`, albumData),
@@ -195,6 +204,31 @@ updateOrderStatus: async (orderId, statusData) => {
 
 
 
+
+// Корзина
+  getCart: () => apiInstance.get('/cart'),
+  addToCart: (versionId, quantity = 1) => apiInstance.post('/cart', { version_id: versionId, quantity }),
+  removeFromCart: (itemId) => apiInstance.delete(`/cart/${itemId}`),
+  getCartItemsCount: () => apiInstance.get('/cart/items/count'),
+  clearCart: () => apiInstance.post('/cart/clear'),
+
+
+
+// Профиль
+getProfile: () => apiInstance.get('/profile'),
+updateProfile: (profileData) => apiInstance.put('/profile', profileData),
+
+// Адреса
+getAddresses: () => apiInstance.get('/addresses'),
+createAddress: (addressData) => apiInstance.post('/addresses', addressData),
+updateAddress: (id, addressData) => apiInstance.put(`/addresses/${id}`, addressData),
+deleteAddress: (id) => apiInstance.delete(`/addresses/${id}`),
+setDefaultAddress: (id) => apiInstance.patch(`/addresses/${id}`),
+
+// Избранное
+getWishlist: () => apiInstance.get('/wishlist'),
+addToWishlist: (albumId) => apiInstance.post('/wishlist', { album_id: albumId }),
+removeFromWishlist: (albumId) => apiInstance.delete('/wishlist', { data: { album_id: albumId } }),
 
 
 

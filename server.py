@@ -499,35 +499,42 @@ def get_album_discounts(album_id):
 @app.route('/api/cart', methods=['GET', 'POST'])
 @jwt_required()
 def cart_operations():
-    current_user = get_jwt_identity()
+    # Получаем ID пользователя из JWT токена
+    user_id = get_jwt_identity()  # Это будет строка или число, а не словарь
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
     try:
-        cur.execute('SELECT id FROM users WHERE id = %s', (current_user['id'],))
+        # Проверяем существование пользователя
+        cur.execute('SELECT id FROM users WHERE id = %s', (user_id,))
         if not cur.fetchone():
             return jsonify({'message': 'User not found!'}), 404
 
         if request.method == 'GET':
             cur.execute('''
-                SELECT ci.id, ci.quantity, 
-                       av.id as version_id, av.version_name,
-                       a.id as album_id, a.title as album_title, 
-                       a.base_price + av.price_diff as price,
-                       a.main_image_url
+                SELECT 
+                    ci.id,
+                    ci.quantity,
+                    ci.cart_id,
+                    av.id AS version_id, 
+                    av.version_name,
+                    a.id AS album_id, 
+                    a.title AS album_title, 
+                    (a.base_price + av.price_diff) AS price,
+                    a.main_image_url
                 FROM cart_items ci
                 JOIN album_versions av ON ci.album_version_id = av.id
                 JOIN albums a ON av.album_id = a.id
                 JOIN cart c ON ci.cart_id = c.id
                 WHERE c.user_id = %s
-            ''', (current_user['id'],))
-            items = cur.fetchall()
+            ''', (user_id,))
             
-            total = sum(item['price'] * item['quantity'] for item in items)
+            items = cur.fetchall()
+            total = sum(float(item['price']) * int(item['quantity']) for item in items) if items else 0
             
             return jsonify({
                 'items': items,
-                'total': total,
+                'total': round(total, 2),
                 'cart_id': items[0]['cart_id'] if items else None
             })
 
@@ -537,17 +544,19 @@ def cart_operations():
                 return jsonify({
                     'message': 'version_id is required',
                     'received_data': data
-                }), 422
+                }), 400
 
-            cur.execute('SELECT id FROM cart WHERE user_id = %s', (current_user['id'],))
+            # Получаем или создаем корзину
+            cur.execute('SELECT id FROM cart WHERE user_id = %s', (user_id,))
             cart = cur.fetchone()
             
             if not cart:
-                cur.execute('INSERT INTO cart (user_id) VALUES (%s) RETURNING id', (current_user['id'],))
+                cur.execute('INSERT INTO cart (user_id) VALUES (%s) RETURNING id', (user_id,))
                 cart_id = cur.fetchone()['id']
             else:
                 cart_id = cart['id']
             
+            # Добавляем товар в корзину
             cur.execute('''
                 INSERT INTO cart_items (cart_id, album_version_id, quantity)
                 VALUES (%s, %s, %s)
@@ -561,10 +570,13 @@ def cart_operations():
 
     except Exception as e:
         conn.rollback()
+        app.logger.error(f"Cart operation error: {str(e)}")
         return jsonify({'message': str(e)}), 400
     finally:
         cur.close()
         conn.close()
+
+
 
 # Удалить товар из корзины.
 @app.route('/api/cart/<int:item_id>', methods=['DELETE'])
@@ -1508,7 +1520,457 @@ def delete_order(order_id):
         cur.close()
         conn.close()
 
+# =============================================================================================
+# ===================================== КОРЗИНА ===============================================
+# =============================================================================================
 
+
+# =============================================================================================
+# ===================================== ЗАКАЗЫ ================================================
+# =============================================================================================
+
+@app.route('/api/orders', methods=['POST'])
+@jwt_required()
+def create_order():
+    current_user = get_jwt_identity()
+    data = request.get_json()
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    if not data or 'address_id' not in data:
+        return jsonify({'message': 'Address ID is required'}), 400
+    
+    try:
+        # Получаем корзину пользователя
+        cur.execute('''
+            SELECT ci.id, ci.album_version_id, ci.quantity, 
+                   a.base_price + av.price_diff as price,
+                   a.title as album_title, av.version_name
+            FROM cart_items ci
+            JOIN album_versions av ON ci.album_version_id = av.id
+            JOIN albums a ON av.album_id = a.id
+            JOIN cart c ON ci.cart_id = c.id
+            WHERE c.user_id = %s
+        ''', (current_user['id'],))
+        cart_items = cur.fetchall()
+        
+        if not cart_items:
+            return jsonify({'message': 'Cart is empty'}), 400
+        
+        # Рассчитываем общую сумму
+        total_amount = sum(item['price'] * item['quantity'] for item in cart_items)
+        
+        # Создаем заказ
+        cur.execute('''
+            INSERT INTO orders (user_id, address_id, total_amount, status)
+            VALUES (%s, %s, %s, 'created')
+            RETURNING id
+        ''', (current_user['id'], data['address_id'], total_amount))
+        order_id = cur.fetchone()[0]
+        
+        # Добавляем товары в заказ
+        for item in cart_items:
+            cur.execute('''
+                INSERT INTO order_items (order_id, album_version_id, quantity, price_per_unit, version_name)
+                VALUES (%s, %s, %s, %s, %s)
+            ''', (order_id, item['album_version_id'], item['quantity'], item['price'], item['version_name']))
+            
+            # Уменьшаем количество на складе
+            cur.execute('''
+                UPDATE album_versions 
+                SET stock_quantity = stock_quantity - %s
+                WHERE id = %s
+            ''', (item['quantity'], item['album_version_id']))
+        
+        # Очищаем корзину
+        cur.execute('''
+            DELETE FROM cart_items 
+            WHERE cart_id IN (
+                SELECT id FROM cart WHERE user_id = %s
+            )
+        ''', (current_user['id'],))
+        
+        conn.commit()
+        
+        # Получаем созданный заказ
+        cur.execute('''
+            SELECT o.*, ua.country, ua.city, ua.postal_code, 
+                   ua.street, ua.house, ua.apartment
+            FROM orders o
+            JOIN user_addresses ua ON o.address_id = ua.id
+            WHERE o.id = %s
+        ''', (order_id,))
+        order = cur.fetchone()
+        
+        cur.execute('''
+            SELECT oi.*, a.title as album_title, a.main_image_url,
+                   ar.name as artist_name
+            FROM order_items oi
+            JOIN album_versions av ON oi.album_version_id = av.id
+            JOIN albums a ON av.album_id = a.id
+            JOIN artists ar ON a.artist_id = ar.id
+            WHERE oi.order_id = %s
+        ''', (order_id,))
+        order_items = cur.fetchall()
+        
+        order['items'] = order_items
+        
+        return jsonify(order), 201
+        
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Create order error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# =============================================================================================
+# ===================================== ПРОФИЛЬ ===============================================
+# =============================================================================================
+
+@app.route('/api/profile', methods=['GET', 'PUT'])
+@jwt_required()
+def user_profile():
+    current_user = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        if request.method == 'GET':
+            # Получаем данные пользователя
+            cur.execute('''
+                SELECT id, email, first_name, last_name, created_at
+                FROM users
+                WHERE id = %s
+            ''', (current_user['id'],))
+            user = cur.fetchone()
+            
+            if not user:
+                return jsonify({'message': 'User not found'}), 404
+            
+            # Получаем адреса пользователя
+            cur.execute('''
+                SELECT * FROM user_addresses
+                WHERE user_id = %s
+            ''', (current_user['id'],))
+            addresses = cur.fetchall()
+            
+            # Получаем заказы пользователя
+            cur.execute('''
+                SELECT o.id, o.total_amount, o.status, o.created_at,
+                       ua.country, ua.city, ua.postal_code
+                FROM orders o
+                LEFT JOIN user_addresses ua ON o.address_id = ua.id
+                WHERE o.user_id = %s
+                ORDER BY o.created_at DESC
+                LIMIT 5
+            ''', (current_user['id'],))
+            orders = cur.fetchall()
+            
+            # Получаем избранное
+            cur.execute('''
+                SELECT w.id, a.id as album_id, a.title, a.main_image_url,
+                       ar.name as artist_name
+                FROM wishlist w
+                JOIN albums a ON w.album_id = a.id
+                JOIN artists ar ON a.artist_id = ar.id
+                WHERE w.user_id = %s
+                LIMIT 5
+            ''', (current_user['id'],))
+            wishlist = cur.fetchall()
+            
+            return jsonify({
+                'user': user,
+                'addresses': addresses,
+                'recent_orders': orders,
+                'wishlist': wishlist
+            })
+            
+        elif request.method == 'PUT':
+            data = request.get_json()
+            if not data:
+                return jsonify({'message': 'No data provided'}), 400
+                
+            update_fields = []
+            update_values = []
+            
+            if 'first_name' in data:
+                update_fields.append("first_name = %s")
+                update_values.append(data['first_name'])
+                
+            if 'last_name' in data:
+                update_fields.append("last_name = %s")
+                update_values.append(data['last_name'])
+                
+            if 'email' in data:
+                update_fields.append("email = %s")
+                update_values.append(data['email'])
+                
+            if 'password' in data and data['password']:
+                hashed_password = generate_password_hash(data['password'])
+                update_fields.append("password_hash = %s")
+                update_values.append(hashed_password)
+                
+            if not update_fields:
+                return jsonify({'message': 'Nothing to update'}), 400
+                
+            update_values.append(current_user['id'])
+            
+            update_query = f'''
+                UPDATE users SET
+                {', '.join(update_fields)}
+                WHERE id = %s
+                RETURNING id, email, first_name, last_name
+            '''
+            
+            cur.execute(update_query, update_values)
+            updated_user = cur.fetchone()
+            conn.commit()
+            
+            if not updated_user:
+                return jsonify({'message': 'User not found'}), 404
+                
+            return jsonify(updated_user)
+            
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Profile error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# =============================================================================================
+# ===================================== АДРЕСА ================================================
+# =============================================================================================
+
+@app.route('/api/addresses', methods=['GET', 'POST'])
+@jwt_required()
+def user_addresses():
+    current_user = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        if request.method == 'GET':
+            cur.execute('''
+                SELECT * FROM user_addresses
+                WHERE user_id = %s
+                ORDER BY is_default DESC
+            ''', (current_user['id'],))
+            addresses = cur.fetchall()
+            return jsonify(addresses)
+            
+        elif request.method == 'POST':
+            data = request.get_json()
+            required_fields = ['country', 'city', 'postal_code', 'street', 'house']
+            if not all(field in data for field in required_fields):
+                return jsonify({'message': 'Missing required fields'}), 400
+                
+            # Если это первый адрес, делаем его адресом по умолчанию
+            cur.execute('SELECT COUNT(*) FROM user_addresses WHERE user_id = %s', (current_user['id'],))
+            count = cur.fetchone()['count']
+            is_default = count == 0
+            
+            cur.execute('''
+                INSERT INTO user_addresses (
+                    user_id, country, city, postal_code, 
+                    street, house, apartment, is_default
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING *
+            ''', (
+                current_user['id'],
+                data['country'],
+                data['city'],
+                data['postal_code'],
+                data['street'],
+                data['house'],
+                data.get('apartment', ''),
+                is_default
+            ))
+            new_address = cur.fetchone()
+            conn.commit()
+            return jsonify(new_address), 201
+            
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Addresses error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/api/addresses/<int:address_id>', methods=['PUT', 'DELETE', 'PATCH'])
+@jwt_required()
+def user_address(address_id):
+    current_user = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Проверяем, что адрес принадлежит пользователю
+        cur.execute('''
+            SELECT id FROM user_addresses
+            WHERE id = %s AND user_id = %s
+        ''', (address_id, current_user['id']))
+        if not cur.fetchone():
+            return jsonify({'message': 'Address not found'}), 404
+            
+        if request.method == 'PUT':
+            data = request.get_json()
+            required_fields = ['country', 'city', 'postal_code', 'street', 'house']
+            if not all(field in data for field in required_fields):
+                return jsonify({'message': 'Missing required fields'}), 400
+                
+            cur.execute('''
+                UPDATE user_addresses SET
+                    country = %s,
+                    city = %s,
+                    postal_code = %s,
+                    street = %s,
+                    house = %s,
+                    apartment = %s
+                WHERE id = %s
+                RETURNING *
+            ''', (
+                data['country'],
+                data['city'],
+                data['postal_code'],
+                data['street'],
+                data['house'],
+                data.get('apartment', ''),
+                address_id
+            ))
+            updated_address = cur.fetchone()
+            conn.commit()
+            return jsonify(updated_address)
+            
+        elif request.method == 'DELETE':
+            # Проверяем, не является ли адрес адресом по умолчанию
+            cur.execute('SELECT is_default FROM user_addresses WHERE id = %s', (address_id,))
+            if cur.fetchone()['is_default']:
+                return jsonify({'message': 'Cannot delete default address'}), 400
+                
+            cur.execute('DELETE FROM user_addresses WHERE id = %s RETURNING id', (address_id,))
+            if not cur.fetchone():
+                return jsonify({'message': 'Address not found'}), 404
+                
+            conn.commit()
+            return jsonify({'message': 'Address deleted successfully'}), 200
+            
+        elif request.method == 'PATCH':
+            # Установка адреса по умолчанию
+            cur.execute('''
+                UPDATE user_addresses 
+                SET is_default = CASE 
+                    WHEN id = %s THEN TRUE
+                    ELSE FALSE
+                END
+                WHERE user_id = %s
+                RETURNING *
+            ''', (address_id, current_user['id']))
+            updated_addresses = cur.fetchall()
+            conn.commit()
+            
+            # Находим новый адрес по умолчанию
+            default_address = next((addr for addr in updated_addresses if addr['is_default']), None)
+            return jsonify(default_address)
+            
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Address error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# =============================================================================================
+# ===================================== ИЗБРАННОЕ =============================================
+# =============================================================================================
+
+@app.route('/api/wishlist', methods=['GET', 'POST', 'DELETE'])
+@jwt_required()
+def wishlist():
+    current_user = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        if request.method == 'GET':
+            # Получаем избранное пользователя
+            cur.execute('''
+                SELECT w.id, a.id as album_id, a.title, a.main_image_url,
+                       ar.name as artist_name, a.base_price
+                FROM wishlist w
+                JOIN albums a ON w.album_id = a.id
+                JOIN artists ar ON a.artist_id = ar.id
+                WHERE w.user_id = %s
+            ''', (current_user['id'],))
+            wishlist_items = cur.fetchall()
+            return jsonify(wishlist_items)
+            
+        elif request.method == 'POST':
+            # Добавляем альбом в избранное
+            data = request.get_json()
+            if not data or 'album_id' not in data:
+                return jsonify({'message': 'Album ID is required'}), 400
+                
+            # Проверяем, есть ли уже этот альбом в избранном
+            cur.execute('''
+                SELECT id FROM wishlist
+                WHERE user_id = %s AND album_id = %s
+            ''', (current_user['id'], data['album_id']))
+            if cur.fetchone():
+                return jsonify({'message': 'Album already in wishlist'}), 400
+                
+            cur.execute('''
+                INSERT INTO wishlist (user_id, album_id)
+                VALUES (%s, %s)
+                RETURNING id
+            ''', (current_user['id'], data['album_id']))
+            new_item = cur.fetchone()
+            conn.commit()
+            
+            # Возвращаем информацию о добавленном альбоме
+            cur.execute('''
+                SELECT a.id, a.title, a.main_image_url, ar.name as artist_name
+                FROM albums a
+                JOIN artists ar ON a.artist_id = ar.id
+                WHERE a.id = %s
+            ''', (data['album_id'],))
+            album = cur.fetchone()
+            
+            return jsonify({
+                'id': new_item['id'],
+                'album': album
+            }), 201
+            
+        elif request.method == 'DELETE':
+            # Удаляем альбом из избранного
+            data = request.get_json()
+            if not data or 'album_id' not in data:
+                return jsonify({'message': 'Album ID is required'}), 400
+                
+            cur.execute('''
+                DELETE FROM wishlist
+                WHERE user_id = %s AND album_id = %s
+                RETURNING id
+            ''', (current_user['id'], data['album_id']))
+            if not cur.fetchone():
+                return jsonify({'message': 'Album not found in wishlist'}), 404
+                
+            conn.commit()
+            return jsonify({'message': 'Album removed from wishlist'}), 200
+            
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Wishlist error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
       
 if __name__ == '__main__':
     app.run(debug=True)
