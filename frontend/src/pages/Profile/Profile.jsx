@@ -6,7 +6,6 @@ import {
   Button, 
   Paper, 
   Avatar,
-  Divider,
   List,
   ListItem,
   ListItemText,

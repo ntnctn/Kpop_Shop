@@ -12,13 +12,15 @@ import {
   Badge
 } from '@mui/material';
 import {
-  Menu as MenuIcon,
-  Home as HomeIcon,
-  Album as AlbumIcon,
-  Group as GroupIcon,
-  ShoppingCart as CartIcon,
-  Person as PersonIcon,
-  AdminPanelSettings as AdminIcon
+  MenuOutlined as MenuIcon,
+  // HomeOutlined as HomeIcon,
+  AlbumOutlined as AlbumIcon,
+  // GroupOutlined as GroupIcon,
+  ShoppingCartOutlined as CartIcon,
+  // PersonOutlined as PersonIcon,
+  LoginOutlined as Login,
+  LogoutOutlined as LogoutOut,
+  AdminPanelSettingsOutlined as AdminIcon
 } from '@mui/icons-material';
 
 const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
@@ -69,9 +71,9 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
           </Menu>
 
           {/* Иконка главной страницы */}
-          <IconButton component={Link} to="/" color="inherit" sx={{ mr: 1 }}>
+          {/* <IconButton component={Link} to="/" color="inherit" sx={{ mr: 1 }}>
             <HomeIcon />
-          </IconButton>
+          </IconButton> */}
 
           {/* Иконка каталога */}
           <IconButton component={Link} to="/catalog" color="inherit" sx={{ mr: 1 }}>
@@ -79,7 +81,7 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
           </IconButton>
         </Box>
 
-        {/* Логотип - оставляем текстом */}
+        {/* Логотип текстом */}
         <Typography 
           variant="h6" 
           component={Link} 
@@ -112,14 +114,14 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
           {/* Иконка личного кабинета */}
           {currentUser ? (
             <>
-              <IconButton 
+              {/* <IconButton 
                 component={Link}
                 to="/profile"
                 color="inherit"
                 sx={{ mr: 1 }}
               >
                 <PersonIcon />
-              </IconButton>
+              </IconButton> */}
 
               {currentUser.isAdmin && (
                 <IconButton 
@@ -135,7 +137,7 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
               <Button 
                 color="inherit"
                 onClick={onLogout}
-                startIcon={<PersonIcon />}
+                startIcon={<LogoutOut />}
               >
                 Выйти
               </Button>
@@ -144,7 +146,7 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
             <Button 
               color="inherit"
               onClick={onAuthClick}
-              startIcon={<PersonIcon />}
+              startIcon={<Login />}
             >
               Войти
             </Button>

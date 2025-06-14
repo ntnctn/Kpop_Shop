@@ -512,29 +512,44 @@ def cart_operations():
 
         if request.method == 'GET':
             cur.execute('''
-                SELECT 
-                    ci.id,
-                    ci.quantity,
-                    ci.cart_id,
-                    av.id AS version_id, 
-                    av.version_name,
-                    a.id AS album_id, 
-                    a.title AS album_title, 
-                    (a.base_price + av.price_diff) AS price,
-                    a.main_image_url
-                FROM cart_items ci
-                JOIN album_versions av ON ci.album_version_id = av.id
-                JOIN albums a ON av.album_id = a.id
-                JOIN cart c ON ci.cart_id = c.id
-                WHERE c.user_id = %s
-            ''', (user_id,))
-            
+            SELECT 
+                ci.id,
+                ci.quantity,
+                ci.cart_id,
+                av.id AS version_id, 
+                av.version_name,
+                a.id AS album_id, 
+                a.title AS album_title, 
+                (a.base_price + av.price_diff) AS base_price,
+                (a.base_price + av.price_diff) * (1 - COALESCE(d.discount_percent, 0) / 100.0) AS final_price,
+                a.main_image_url,
+                d.id AS discount_id,
+                d.discount_percent,
+                d.name AS discount_name
+            FROM cart_items ci
+            JOIN album_versions av ON ci.album_version_id = av.id
+            JOIN albums a ON av.album_id = a.id
+            JOIN cart c ON ci.cart_id = c.id
+            LEFT JOIN album_discounts ad ON a.id = ad.album_id
+            LEFT JOIN discounts d ON ad.discount_id = d.id 
+                AND d.is_active = true 
+                AND CURRENT_TIMESTAMP BETWEEN d.start_date AND d.end_date
+            WHERE c.user_id = %s
+        ''', (user_id,))
+        
             items = cur.fetchall()
-            total = sum(float(item['price']) * int(item['quantity']) for item in items) if items else 0
-            
+        
+            # Рассчитываем итоги
+            base_total = sum(float(item['base_price']) * int(item['quantity']) for item in items)
+            final_total = sum(float(item['final_price']) * int(item['quantity']) for item in items)
+        
             return jsonify({
                 'items': items,
-                'total': round(total, 2),
+             'totals': {
+                    'base_total': round(base_total, 2),
+                  'final_total': round(final_total, 2),
+                  'total_discount': round(base_total - final_total, 2)
+                },
                 'cart_id': items[0]['cart_id'] if items else None
             })
 
@@ -556,14 +571,27 @@ def cart_operations():
             else:
                 cart_id = cart['id']
             
-            # Добавляем товар в корзину
+            # Проверяем, есть ли уже такой товар в корзине
             cur.execute('''
-                INSERT INTO cart_items (cart_id, album_version_id, quantity)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (cart_id, album_version_id) 
-                DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity
-                RETURNING id
-            ''', (cart_id, data['version_id'], data.get('quantity', 1)))
+                SELECT id, quantity FROM cart_items 
+                WHERE cart_id = %s AND album_version_id = %s
+            ''', (cart_id, data['version_id']))
+            existing_item = cur.fetchone()
+
+            if existing_item:
+                # Обновляем количество
+                new_quantity = existing_item['quantity'] + data.get('quantity', 1)
+                cur.execute('''
+                    UPDATE cart_items 
+                    SET quantity = %s 
+                    WHERE id = %s
+                ''', (new_quantity, existing_item['id']))
+            else:
+                # Добавляем новый товар
+                cur.execute('''
+                    INSERT INTO cart_items (cart_id, album_version_id, quantity)
+                    VALUES (%s, %s, %s)
+                ''', (cart_id, data['version_id'], data.get('quantity', 1)))
             
             conn.commit()
             return jsonify({'message': 'Item added to cart!'})
@@ -577,38 +605,258 @@ def cart_operations():
         conn.close()
 
 
-
 # Удалить товар из корзины.
 @app.route('/api/cart/<int:item_id>', methods=['DELETE'])
 @jwt_required()
 def remove_from_cart(item_id):
-    current_user = get_jwt_identity()
+    user_id = get_jwt_identity()  # Получаем ID пользователя 
     conn = get_db_connection()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=RealDictCursor)  
     
     try:
+        # 1. Проверяем существование пользователя
+        cur.execute('SELECT id FROM users WHERE id = %s', (user_id,))
+        if not cur.fetchone():
+            return jsonify({'message': 'User not found!'}), 404
+
+        # 2. Удаляем товар только если он принадлежит текущему пользователю
         cur.execute('''
             DELETE FROM cart_items 
             WHERE id = %s AND cart_id IN (
                 SELECT id FROM cart WHERE user_id = %s
             )
             RETURNING *
-        ''', (item_id, current_user['id']))
+        ''', (item_id, user_id))
         
-        if not cur.fetchone():
-            return jsonify({'message': 'Item not found in your cart!'}), 404
+        deleted_item = cur.fetchone()
+        
+        if not deleted_item:
+            return jsonify({
+                'message': 'Item not found in your cart or already removed',
+                'item_id': item_id,
+                'user_id': user_id
+            }), 404
             
         conn.commit()
-        return jsonify({'message': 'Item removed from cart!'})
+        
+        # 3. Возвращаем информацию об удаленном товаре
+        return jsonify({
+            'message': 'Item removed from cart successfully',
+            'removed_item': deleted_item
+        })
+
     except Exception as e:
         conn.rollback()
+        app.logger.error(f"Error removing item {item_id} from cart: {str(e)}")
+        return jsonify({
+            'message': 'Failed to remove item from cart',
+            'error': str(e),
+            'item_id': item_id
+        }), 400
+        
+    finally:
+        cur.close()
+        conn.close()
+  
+
+# ---- Оформление заказа ----
+
+# Добавить содершимое корзины в заказ.
+@app.route('/api/orders', methods=['POST'])
+@jwt_required()
+def create_order():
+    user_id = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        # 1. Получаем содержимое корзины с учетом скидок
+        cur.execute('''
+            SELECT 
+                ci.quantity,
+                av.id as version_id,
+                av.version_name,
+                (a.base_price + av.price_diff) as base_price,
+                (a.base_price + av.price_diff) * (1 - COALESCE(d.discount_percent, 0)/100) as final_price,
+                d.discount_percent
+            FROM cart_items ci
+            JOIN album_versions av ON ci.album_version_id = av.id
+            JOIN albums a ON av.album_id = a.id
+            JOIN cart c ON ci.cart_id = c.id
+            LEFT JOIN album_discounts ad ON a.id = ad.album_id
+            LEFT JOIN discounts d ON ad.discount_id = d.id 
+                AND d.is_active = true 
+                AND CURRENT_TIMESTAMP BETWEEN d.start_date AND d.end_date
+            WHERE c.user_id = %s
+        ''', (user_id,))
+        
+        cart_items = cur.fetchall()
+        
+        if not cart_items:
+            return jsonify({'message': 'Cart is empty'}), 400
+
+        # 2. Рассчитываем итоговую сумму со скидкой
+        total_amount = sum(float(item['final_price']) * int(item['quantity']) for item in cart_items)
+
+        # 3. Создаем заказ
+        cur.execute('''
+            INSERT INTO orders (user_id, total_amount, status)
+            VALUES (%s, %s, 'created')
+            RETURNING id
+        ''', (user_id, total_amount))
+        
+        order_id = cur.fetchone()['id']
+
+        # 4. Добавляем товары в заказ (фиксируем цену со скидкой)
+        for item in cart_items:
+            cur.execute('''
+                INSERT INTO order_items (
+                    order_id, 
+                    album_version_id, 
+                    quantity, 
+                    price_per_unit,
+                    version_name
+                )
+                VALUES (%s, %s, %s, %s, %s)
+            ''', (
+                order_id,
+                item['version_id'],
+                item['quantity'],
+                item['final_price'],  # Записываем цену со скидкой
+                item['version_name']
+            ))
+
+        # 5. Очищаем корзину
+        cur.execute('''
+            DELETE FROM cart_items 
+            WHERE cart_id IN (SELECT id FROM cart WHERE user_id = %s)
+        ''', (user_id,))
+        
+        conn.commit()
+
+        return jsonify({
+            'message': 'Order created successfully',
+            'order_id': order_id,
+            'total_amount': total_amount,
+            'discount_applied': any(item['discount_percent'] for item in cart_items)
+        }), 201
+
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Create order error: {str(e)}")
         return jsonify({'message': str(e)}), 400
     finally:
         cur.close()
         conn.close()
- 
-  
-  
+
+# ---- История заказов ----
+
+# Получить список заказов текущего пользователя
+@app.route('/api/orders', methods=['GET'])
+@jwt_required()
+def get_user_orders():
+    user_id = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Получаем параметры пагинации
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        offset = (page - 1) * per_page
+        
+        # Основной запрос заказов пользователя
+        cur.execute('''
+            SELECT o.*
+            FROM orders o
+            WHERE o.user_id = %s
+            ORDER BY o.created_at DESC
+            LIMIT %s OFFSET %s
+        ''', (user_id, per_page, offset))
+        orders = cur.fetchall()
+        
+        # Получаем товары для каждого заказа
+        for order in orders:
+            cur.execute('''
+                SELECT 
+                    oi.*, 
+                    av.version_name,
+                    a.title as album_title, 
+                    a.main_image_url,
+                    ar.name as artist_name
+                FROM order_items oi
+                JOIN album_versions av ON oi.album_version_id = av.id
+                JOIN albums a ON av.album_id = a.id
+                JOIN artists ar ON a.artist_id = ar.id
+                WHERE oi.order_id = %s
+            ''', (order['id'],))
+            order['items'] = cur.fetchall()
+        
+        # Получаем общее количество заказов пользователя
+        cur.execute('SELECT COUNT(*) FROM orders WHERE user_id = %s', (user_id,))
+        total_orders = cur.fetchone()['count']
+        
+        return jsonify({
+            'orders': orders,
+            'total': total_orders,
+            'page': page,
+            'per_page': per_page
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Get user orders error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+# Получить детальную информацию о заказе пользователя
+@app.route('/api/orders/<int:order_id>', methods=['GET'])
+@jwt_required()
+def get_user_order(order_id):
+    user_id = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # Проверяем, что заказ принадлежит пользователю
+        cur.execute('''
+            SELECT o.*
+            FROM orders o
+            WHERE o.id = %s AND o.user_id = %s
+        ''', (order_id, user_id))
+        order = cur.fetchone()
+        
+        if not order:
+            return jsonify({'message': 'Order not found or access denied'}), 404
+        
+        # Получаем товары в заказе
+        cur.execute('''
+            SELECT 
+                oi.*, 
+                av.version_name,
+                a.title as album_title, 
+                a.main_image_url,
+                ar.name as artist_name
+            FROM order_items oi
+            JOIN album_versions av ON oi.album_version_id = av.id
+            JOIN albums a ON av.album_id = a.id
+            JOIN artists ar ON a.artist_id = ar.id
+            WHERE oi.order_id = %s
+        ''', (order_id,))
+        order['items'] = cur.fetchall()
+        
+        return jsonify(order)
+        
+    except Exception as e:
+        app.logger.error(f"Get user order error: {str(e)}")
+        return jsonify({'message': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+        
+        
+        
 # =============================================================================================
 # ==================================== АДМИНСКИЕ ==============================================
 # =============================================================================================
@@ -1133,8 +1381,8 @@ def remove_album_from_discount(discount_id, album_id):
         cur.close()
         conn.close()
     
-
-
+       
+        
 # =============================================================================================
 # ============================== АДМИНСКОЕ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ ==============================
 # =============================================================================================
@@ -1520,110 +1768,7 @@ def delete_order(order_id):
         cur.close()
         conn.close()
 
-# =============================================================================================
-# ===================================== КОРЗИНА ===============================================
-# =============================================================================================
 
-
-# =============================================================================================
-# ===================================== ЗАКАЗЫ ================================================
-# =============================================================================================
-
-@app.route('/api/orders', methods=['POST'])
-@jwt_required()
-def create_order():
-    current_user = get_jwt_identity()
-    data = request.get_json()
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    if not data or 'address_id' not in data:
-        return jsonify({'message': 'Address ID is required'}), 400
-    
-    try:
-        # Получаем корзину пользователя
-        cur.execute('''
-            SELECT ci.id, ci.album_version_id, ci.quantity, 
-                   a.base_price + av.price_diff as price,
-                   a.title as album_title, av.version_name
-            FROM cart_items ci
-            JOIN album_versions av ON ci.album_version_id = av.id
-            JOIN albums a ON av.album_id = a.id
-            JOIN cart c ON ci.cart_id = c.id
-            WHERE c.user_id = %s
-        ''', (current_user['id'],))
-        cart_items = cur.fetchall()
-        
-        if not cart_items:
-            return jsonify({'message': 'Cart is empty'}), 400
-        
-        # Рассчитываем общую сумму
-        total_amount = sum(item['price'] * item['quantity'] for item in cart_items)
-        
-        # Создаем заказ
-        cur.execute('''
-            INSERT INTO orders (user_id, address_id, total_amount, status)
-            VALUES (%s, %s, %s, 'created')
-            RETURNING id
-        ''', (current_user['id'], data['address_id'], total_amount))
-        order_id = cur.fetchone()[0]
-        
-        # Добавляем товары в заказ
-        for item in cart_items:
-            cur.execute('''
-                INSERT INTO order_items (order_id, album_version_id, quantity, price_per_unit, version_name)
-                VALUES (%s, %s, %s, %s, %s)
-            ''', (order_id, item['album_version_id'], item['quantity'], item['price'], item['version_name']))
-            
-            # Уменьшаем количество на складе
-            cur.execute('''
-                UPDATE album_versions 
-                SET stock_quantity = stock_quantity - %s
-                WHERE id = %s
-            ''', (item['quantity'], item['album_version_id']))
-        
-        # Очищаем корзину
-        cur.execute('''
-            DELETE FROM cart_items 
-            WHERE cart_id IN (
-                SELECT id FROM cart WHERE user_id = %s
-            )
-        ''', (current_user['id'],))
-        
-        conn.commit()
-        
-        # Получаем созданный заказ
-        cur.execute('''
-            SELECT o.*, ua.country, ua.city, ua.postal_code, 
-                   ua.street, ua.house, ua.apartment
-            FROM orders o
-            JOIN user_addresses ua ON o.address_id = ua.id
-            WHERE o.id = %s
-        ''', (order_id,))
-        order = cur.fetchone()
-        
-        cur.execute('''
-            SELECT oi.*, a.title as album_title, a.main_image_url,
-                   ar.name as artist_name
-            FROM order_items oi
-            JOIN album_versions av ON oi.album_version_id = av.id
-            JOIN albums a ON av.album_id = a.id
-            JOIN artists ar ON a.artist_id = ar.id
-            WHERE oi.order_id = %s
-        ''', (order_id,))
-        order_items = cur.fetchall()
-        
-        order['items'] = order_items
-        
-        return jsonify(order), 201
-        
-    except Exception as e:
-        conn.rollback()
-        app.logger.error(f"Create order error: {str(e)}")
-        return jsonify({'message': str(e)}), 500
-    finally:
-        cur.close()
-        conn.close()
 
 # =============================================================================================
 # ===================================== ПРОФИЛЬ ===============================================

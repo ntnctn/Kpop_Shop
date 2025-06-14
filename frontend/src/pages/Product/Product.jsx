@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../../api';
-import { 
+import {
   Container,
   Typography,
   Button,
@@ -9,7 +9,7 @@ import {
   CircularProgress,
   Alert,
   Chip,
-  Divider,
+  Snackbar,
   Tooltip
 } from '@mui/material';
 import './Product.css';
@@ -24,6 +24,8 @@ const Product = () => {
   const [discounts, setDiscounts] = useState([]);
   const [imageLoading, setImageLoading] = useState(true);
 
+  const [snackbar, setSnackbar] = useState({ open: false, message: 'test' });
+
   useEffect(() => {
     const fetchAlbum = async () => {
       try {
@@ -32,7 +34,7 @@ const Product = () => {
           api.getAlbum(id),
           api.getAlbumDiscounts(id)
         ]);
-        
+
         setAlbum(albumResponse.data);
         setDiscounts(discountsResponse.data);
         setCurrentImage(albumResponse.data.main_image_url);
@@ -49,12 +51,47 @@ const Product = () => {
 
   useEffect(() => {
     if (!album || !album.versions) return;
-    
+
     const version = album.versions[selectedVersion];
     const versionImage = version?.images?.[0] || album.main_image_url;
     setCurrentImage(versionImage);
     setImageLoading(true);
   }, [selectedVersion, album]);
+
+
+  const handleAddToCart = async () => {
+    if (!album || !album.versions) return;
+
+    try {
+      const version = album.versions[selectedVersion];
+      if (!version) {
+        throw new Error('Версия товара не найдена');
+      }
+
+      console.log('Добавляемая версия:', version); // Для отладки
+
+      const response = await api.addToCart(version.id, 1);
+      console.log('Ответ сервера:', response.data); // Для отладки
+
+      // Уведомление об успехе
+      setSnackbar({
+        open: true,
+        message: 'Товар добавлен в корзину!',
+        severity: 'success'
+      });
+
+    } catch (err) {
+      console.error('Ошибка добавления в корзину:', err.response?.data || err.message);
+
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || 'Не удалось добавить товар в корзину',
+        severity: 'error'
+      });
+    }
+  };
+
+
 
   const handleImageError = (e) => {
     e.target.style.display = 'none';
@@ -71,9 +108,9 @@ const Product = () => {
 
   if (loading) {
     return (
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'center',
         alignItems: 'center',
         minHeight: '300px'
       }}>
@@ -81,25 +118,25 @@ const Product = () => {
       </Box>
     );
   }
-  
+
   if (error) return <Alert severity="error">Ошибка: {error}</Alert>;
   if (!album) return <Alert severity="warning">Альбом не найден</Alert>;
 
   // Price calculations
-  const basePrice = typeof album.base_price === 'string' 
-    ? parseFloat(album.base_price) 
+  const basePrice = typeof album.base_price === 'string'
+    ? parseFloat(album.base_price)
     : album.base_price;
 
   const currentVersion = album.versions?.[selectedVersion] || null;
-  
-  const versionPriceDiff = currentVersion 
+
+  const versionPriceDiff = currentVersion
     ? (typeof currentVersion.price_diff === 'string'
       ? parseFloat(currentVersion.price_diff)
       : currentVersion.price_diff || 0)
     : 0;
 
   const priceWithoutDiscount = basePrice + versionPriceDiff;
-  
+
   // Filter active discounts
   const now = new Date();
   const activeDiscounts = discounts.filter(d => {
@@ -131,15 +168,15 @@ const Product = () => {
 
   return (
     <Container maxWidth="lg" className="product-page">
-      <Box sx={{ 
-        display: 'flex', 
+      <Box sx={{
+        display: 'flex',
         flexDirection: { xs: 'column', md: 'row' },
         gap: 4,
         mt: 4,
         mb: 6
       }}>
         {/* Image block - теперь квадратный */}
-        <Box sx={{ 
+        <Box sx={{
           width: { xs: '100%', md: '400px' },
           height: '400px',
           flexShrink: 0,
@@ -155,7 +192,7 @@ const Product = () => {
           {imageLoading && (
             <CircularProgress sx={{ position: 'absolute' }} />
           )}
-          
+
           {currentImage ? (
             <img
               src={currentImage}
@@ -170,7 +207,7 @@ const Product = () => {
               onError={handleImageError}
             />
           ) : null}
-          
+
           <Box sx={{
             display: currentImage ? 'none' : 'flex',
             flexDirection: 'column',
@@ -200,10 +237,10 @@ const Product = () => {
           <Typography variant="h5" gutterBottom sx={{ color: 'text.secondary', mb: 3 }}>
             {album.artist_name}
           </Typography>
-          
+
           {/* Discounts section */}
           {activeDiscounts.length > 0 && (
-            <Box sx={{ 
+            <Box sx={{
               backgroundColor: 'warning.light',
               borderRadius: 1,
               p: 2,
@@ -212,16 +249,16 @@ const Product = () => {
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
                 🎉 Акционные предложения
               </Typography>
-              
+
               {activeDiscounts.map((discount) => (
                 <Box key={discount.id} sx={{ mb: 1.5 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                    <Chip 
+                    <Chip
                       label={`-${discount.discount_percent}%`}
                       color="error"
                       size="small"
-                      sx={{ 
-                        mr: 1, 
+                      sx={{
+                        mr: 1,
                         fontWeight: 'bold',
                         fontSize: '0.9rem'
                       }}
@@ -230,13 +267,13 @@ const Product = () => {
                       {discount.name}
                     </Typography>
                   </Box>
-                  
+
                   {discount.description && (
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
                       {discount.description}
                     </Typography>
                   )}
-                  
+
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     Действует до: {formatDate(discount.end_date)}
                   </Typography>
@@ -251,7 +288,7 @@ const Product = () => {
               <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'medium' }}>
                 Версия:
               </Typography>
-              <Box sx={{ 
+              <Box sx={{
                 display: 'flex',
                 flexWrap: 'wrap',
                 gap: 1
@@ -282,15 +319,15 @@ const Product = () => {
                   <strong>Упаковка:</strong> {currentVersion.packaging_details}
                 </Typography>
               )}
-              
+
               {currentVersion.preorder_bonuses && (
                 <Typography paragraph sx={{ mb: 1 }}>
                   <strong>Бонусы предзаказа:</strong> {currentVersion.preorder_bonuses}
                 </Typography>
               )}
-              
+
               {currentVersion.is_limited && (
-                <Typography paragraph sx={{ 
+                <Typography paragraph sx={{
                   display: 'flex',
                   alignItems: 'center',
                   color: 'warning.dark',
@@ -304,7 +341,7 @@ const Product = () => {
           )}
 
           {/* Price block */}
-          <Box sx={{ 
+          <Box sx={{
             backgroundColor: 'background.paper',
             borderRadius: 1,
             p: 2,
@@ -313,27 +350,27 @@ const Product = () => {
             <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'medium' }}>
               Цена:
             </Typography>
-            
-            <Box sx={{ 
+
+            <Box sx={{
               display: 'flex',
               alignItems: 'center',
               gap: 2
             }}>
               {maxDiscount > 0 ? (
                 <>
-                  <Typography variant="h4" sx={{ 
+                  <Typography variant="h4" sx={{
                     color: 'error.main',
                     fontWeight: 'bold'
                   }}>
                     ${formatPrice(discountedPrice)}
                   </Typography>
-                  <Typography variant="h6" sx={{ 
+                  <Typography variant="h6" sx={{
                     textDecoration: 'line-through',
                     color: 'text.secondary'
                   }}>
                     ${formatPrice(priceWithoutDiscount)}
                   </Typography>
-                  <Chip 
+                  <Chip
                     label={`-${maxDiscount}%`}
                     color="error"
                     size="small"
@@ -349,7 +386,7 @@ const Product = () => {
           </Box>
 
           {/* Add to cart button */}
-          <Tooltip 
+          <Tooltip
             title={!isInStock ? "Товар временно отсутствует" : ""}
             placement="top"
           >
@@ -359,6 +396,7 @@ const Product = () => {
                 size="large"
                 fullWidth
                 disabled={!isInStock}
+                onClick={handleAddToCart}
                 sx={{
                   py: 1.5,
                   fontSize: '1.1rem',
@@ -366,7 +404,7 @@ const Product = () => {
                   borderRadius: 1
                 }}
               >
-                {isInStock ? 'Есть в наличии' : 'Нет в наличии'}
+                {isInStock ? 'Добавить в корзину' : 'Нет в наличии'}
               </Button>
             </span>
           </Tooltip>
@@ -384,7 +422,15 @@ const Product = () => {
           )}
         </Box>
       </Box>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        message={snackbar.message}
+      />
     </Container>
+
   );
 };
 

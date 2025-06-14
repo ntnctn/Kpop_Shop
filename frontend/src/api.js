@@ -18,6 +18,14 @@ try {
 }
 
 
+// токен в заголовки 
+apiInstance.interceptors.request.use(config => { 
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 // Обработчик запросов
 apiInstance.interceptors.request.use(config => {
   // Для OPTIONS запросов не добавляем заголовки
@@ -60,15 +68,15 @@ export default {
   },
 
 
-// Админские методы для управления пользователями
-getAllUsers: (params = {}) => apiInstance.get('/admin/users', { params }),
-getUserById: (userId) => apiInstance.get(`/admin/users/${userId}`),
-updateUser: (userId, userData) => apiInstance.put(`/admin/users/${userId}`, userData),
-deleteUser: (userId) => apiInstance.delete(`/admin/users/${userId}`),
+  // Админские методы для управления пользователями
+  getAllUsers: (params = {}) => apiInstance.get('/admin/users', { params }),
+  getUserById: (userId) => apiInstance.get(`/admin/users/${userId}`),
+  updateUser: (userId, userData) => apiInstance.put(`/admin/users/${userId}`, userData),
+  deleteUser: (userId) => apiInstance.delete(`/admin/users/${userId}`),
 
 
 
-  
+
   // НОВЫЕ АДМИНСКИЕ МЕТОДЫ
   getAdminAlbums: () => apiInstance.get('/admin/albums'),
   createAlbum: (albumData) => apiInstance.post('/admin/albums', albumData),
@@ -96,9 +104,9 @@ deleteUser: (userId) => apiInstance.delete(`/admin/users/${userId}`),
 
 
   createArtist: (artistData) => apiInstance.post('/admin/artists', artistData),
-  
-  
-  
+
+
+
   // Метод для валидации токена
   validateToken: () => apiInstance.get('/api/validate-token'),
 
@@ -108,7 +116,7 @@ deleteUser: (userId) => apiInstance.delete(`/admin/users/${userId}`),
 
 
 
-  
+
   // Новые методы для редактирования
   updateArtist: (id, artistData) => apiInstance.put(`/admin/artists/${id}`, artistData),
   updateAlbum: (id, albumData) => apiInstance.put(`/admin/albums/${id}`, albumData),
@@ -140,24 +148,24 @@ deleteUser: (userId) => apiInstance.delete(`/admin/users/${userId}`),
     }
   },
 
-deleteUser: async (userId) => {
-  try {
-    const response = await apiInstance.delete(`/admin/users/${userId}`);
-    return response;
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    throw error;
-  }
-},
-updateUser: async (userId, userData) => {
-  try {
-    const response = await apiInstance.put(`/admin/users/${userId}`, userData);
-    return response;
-  } catch (error) {
-    console.error('Error updating user:', error);
-    throw error;
-  }
-},
+  deleteUser: async (userId) => {
+    try {
+      const response = await apiInstance.delete(`/admin/users/${userId}`);
+      return response;
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw error;
+    }
+  },
+  updateUser: async (userId, userData) => {
+    try {
+      const response = await apiInstance.put(`/admin/users/${userId}`, userData);
+      return response;
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw error;
+    }
+  },
   // Скидки для админской панели
   getDiscounts: () => apiInstance.get('/admin/discounts'),
   createDiscount: (discountData) => apiInstance.post('/admin/discounts', discountData),
@@ -167,68 +175,81 @@ updateUser: async (userId, userData) => {
   addAlbumToDiscount: (discountId, albumId) => apiInstance.post(`/admin/discounts/${discountId}/albums`, { album_id: albumId }),
   removeAlbumFromDiscount: (discountId, albumId) => apiInstance.delete(`/admin/discounts/${discountId}/albums/${albumId}`),
 
-// скидки для простых юзеров для страницы альбома
+  // скидки для простых юзеров для страницы альбома
 
-getAlbumDiscounts: (albumId) => apiInstance.get(`/albums/${albumId}/discounts`),
-
-
-
-
-
-// Админские методы для управления заказами
-getAllOrders: (params = {}) => apiInstance.get('/admin/orders', { params }),
-getOrderById: (orderId) => apiInstance.get(`/admin/orders/${orderId}`),
-updateOrderStatus: (orderId, statusData) => apiInstance.put(`/admin/orders/${orderId}/status`, statusData),
-deleteOrder: (orderId) => apiInstance.delete(`/admin/orders/${orderId}`),
-
-// С обработкой ошибок:
-deleteOrder: async (orderId) => {
-  try {
-    const response = await apiInstance.delete(`/admin/orders/${orderId}`);
-    return response;
-  } catch (error) {
-    console.error('Error deleting order:', error);
-    throw error;
-  }
-},
-updateOrderStatus: async (orderId, statusData) => {
-  try {
-    const response = await apiInstance.put(`/admin/orders/${orderId}/status`, statusData);
-    return response;
-  } catch (error) {
-    console.error('Error updating order status:', error);
-    throw error;
-  }
-},
+  getAlbumDiscounts: (albumId) => apiInstance.get(`/albums/${albumId}/discounts`),
 
 
 
 
 
-// Корзина
+  // Админские методы для управления заказами
+  getAllOrders: (params = {}) => apiInstance.get('/admin/orders', { params }),
+  getOrderById: (orderId) => apiInstance.get(`/admin/orders/${orderId}`),
+  updateOrderStatus: (orderId, statusData) => apiInstance.put(`/admin/orders/${orderId}/status`, statusData),
+  deleteOrder: (orderId) => apiInstance.delete(`/admin/orders/${orderId}`),
+
+  // С обработкой ошибок:
+  deleteOrder: async (orderId) => {
+    try {
+      const response = await apiInstance.delete(`/admin/orders/${orderId}`);
+      return response;
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      throw error;
+    }
+  },
+  updateOrderStatus: async (orderId, statusData) => {
+    try {
+      const response = await apiInstance.put(`/admin/orders/${orderId}/status`, statusData);
+      return response;
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      throw error;
+    }
+  },
+
+
+
+
+
+  // Корзина
   getCart: () => apiInstance.get('/cart'),
   addToCart: (versionId, quantity = 1) => apiInstance.post('/cart', { version_id: versionId, quantity }),
   removeFromCart: (itemId) => apiInstance.delete(`/cart/${itemId}`),
   getCartItemsCount: () => apiInstance.get('/cart/items/count'),
   clearCart: () => apiInstance.post('/cart/clear'),
 
+  //заказ 
+  createOrder: () => apiInstance.post('/orders'),
+  clearCart: () => apiInstance.post('/cart/clear'),
+
+  // Профиль
+  getProfile: () => apiInstance.get('/profile'),
+  updateProfile: (profileData) => apiInstance.put('/profile', profileData),
+
+  // Адреса
+  getAddresses: () => apiInstance.get('/addresses'),
+  createAddress: (addressData) => apiInstance.post('/addresses', addressData),
+  updateAddress: (id, addressData) => apiInstance.put(`/addresses/${id}`, addressData),
+  deleteAddress: (id) => apiInstance.delete(`/addresses/${id}`),
+  setDefaultAddress: (id) => apiInstance.patch(`/addresses/${id}`),
+
+  // Избранное
+  getWishlist: () => apiInstance.get('/wishlist'),
+  addToWishlist: (albumId) => apiInstance.post('/wishlist', { album_id: albumId }),
+  removeFromWishlist: (albumId) => apiInstance.delete('/wishlist', { data: { album_id: albumId } }),
+
+  // заказы для пользователя 
+
+  // Для получения списка заказов
+  getUserOrders: (params = {}) => apiInstance.get('/orders', { params }),
+
+  // Для получения конкретного заказа
+  getUserOrder: (orderId) => apiInstance.get(`/orders/${orderId}`),
 
 
-// Профиль
-getProfile: () => apiInstance.get('/profile'),
-updateProfile: (profileData) => apiInstance.put('/profile', profileData),
 
-// Адреса
-getAddresses: () => apiInstance.get('/addresses'),
-createAddress: (addressData) => apiInstance.post('/addresses', addressData),
-updateAddress: (id, addressData) => apiInstance.put(`/addresses/${id}`, addressData),
-deleteAddress: (id) => apiInstance.delete(`/addresses/${id}`),
-setDefaultAddress: (id) => apiInstance.patch(`/addresses/${id}`),
-
-// Избранное
-getWishlist: () => apiInstance.get('/wishlist'),
-addToWishlist: (albumId) => apiInstance.post('/wishlist', { album_id: albumId }),
-removeFromWishlist: (albumId) => apiInstance.delete('/wishlist', { data: { album_id: albumId } }),
 
 
 
