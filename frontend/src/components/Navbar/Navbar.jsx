@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import ArtistMenu from '../ArtistMenu/ArtistMenu';
-import { 
-  AppBar, 
-  Toolbar, 
-  IconButton, 
-  Button, 
-  Typography, 
+import {
+  AppBar,
+  Toolbar,
+  IconButton,
+  Button,
+  Typography,
   Box,
   Menu,
   Badge
@@ -43,7 +43,7 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
   };
 
   return (
-    <AppBar position="static">
+    <AppBar position="static" className="custom-navbar">
       <Toolbar sx={{ justifyContent: 'space-between' }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           {/* Иконка меню артистов */}
@@ -57,15 +57,15 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
           >
             <MenuIcon />
           </IconButton>
-          
+
           <Menu
             anchorEl={anchorEl}
             open={isMenuOpen}
             onClose={handleMenuClose}
             TransitionProps={{ timeout: 150 }}
           >
-            <ArtistMenu 
-              onClose={handleMenuClose} 
+            <ArtistMenu
+              onClose={handleMenuClose}
               preloaded={menuPreloaded}
             />
           </Menu>
@@ -82,17 +82,14 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
         </Box>
 
         {/* Логотип текстом */}
-        <Typography 
-          variant="h6" 
-          component={Link} 
-          to="/" 
-          sx={{ 
-            flexGrow: 1, 
-            textAlign: 'center', 
-            textDecoration: 'none', 
-            color: 'inherit',
-            fontFamily: 'fantasy',
-            letterSpacing: '3px'
+        <Typography
+          variant="navbar-logo"
+          component={Link}
+          to="/"
+          className="navbar-logo"
+          sx={{
+            flexGrow: 1,
+            textAlign: 'center'
           }}
         >
           MagicShop
@@ -100,9 +97,9 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
 
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           {/* Иконка корзины с бейджем */}
-          <IconButton 
-            component={Link} 
-            to="/cart" 
+          <IconButton
+            component={Link}
+            to="/cart"
             color="inherit"
             sx={{ mr: 1 }}
           >
@@ -124,7 +121,7 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
               </IconButton> */}
 
               {currentUser.isAdmin && (
-                <IconButton 
+                <IconButton
                   component={Link}
                   to="/admin"
                   color="inherit"
@@ -134,7 +131,7 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
                 </IconButton>
               )}
 
-              <Button 
+              <Button
                 color="inherit"
                 onClick={onLogout}
                 startIcon={<LogoutOut />}
@@ -143,7 +140,7 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
               </Button>
             </>
           ) : (
-            <Button 
+            <Button
               color="inherit"
               onClick={onAuthClick}
               startIcon={<Login />}

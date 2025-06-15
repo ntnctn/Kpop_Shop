@@ -54,9 +54,11 @@ export default {
   },
 
   //сортировка
-  getArtistAlbums(artistId, params = {}) {
-    return apiInstance.get(`/artists/${artistId}/albums`, { params });
-  },
+getArtistAlbums(artistId, params = {}) {
+  return apiInstance.get(`/artists/${artistId}/albums`, { 
+    params: { ...params, limit: 1000 } // Явно указываем большой лимит
+  });
+},
 
 
   getArtistsByCategory(category) {

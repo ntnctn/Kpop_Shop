@@ -1,7 +1,97 @@
+:root {
+  --navbar-bg-color: #000000; /* Черный цвет для Navbar */
+  --navbar-text-color: #ffffff; /* Белый цвет текста */
+  --navbar-hover-color: rgba(255, 255, 255, 0.1); /* Цвет при наведении */
+  --navbar-active-color: rgba(255, 255, 255, 0.2); /* Активный цвет */
+  --navbar-transition: all 0.3s ease; /* Анимация */
+}
+
+/* Navbar стили */
+.custom-navbar {
+  background-color: var(--navbar-bg-color) !important;
+  color: var(--navbar-text-color) !important;
+  transition: var(--navbar-transition);
+}
+
+.custom-navbar .MuiButton-root,
+.custom-navbar .MuiIconButton-root {
+  color: var(--navbar-text-color) !important;
+}
+
+.custom-navbar .MuiButton-root:hover,
+.custom-navbar .MuiIconButton-root:hover {
+  background-color: var(--navbar-hover-color) !important;
+}
+
+.custom-navbar .MuiButton-root:active,
+.custom-navbar .MuiIconButton-root:active {
+  background-color: var(--navbar-active-color) !important;
+}
+
+.custom-navbar .MuiTypography-root {
+  color: var(--navbar-text-color) !important;
+}
+
+.custom-navbar .MuiBadge-badge {
+  background-color: var(--mui-palette-secondary-main) !important;
+  color: var(--navbar-bg-color) !important;
+}
+
+/* Логотип */
+.navbar-logo {
+  /* font-family: 'fantasy' !important;
+  letter-spacing: 3px !important; */
+  text-decoration: none !important;
+  transition: var(--navbar-transition) !important;
+}
+
+.navbar-logo:hover {
+  opacity: 0.8 !important;
+  transform: scale(1.05) !important;
+}
+
+/* Artist Menu стили (дополнение к существующим) */
+.artist-menu-container {
+  background-color: var(--mui-palette-background-paper) !important;
+}
+
+.artist-menu-item:hover {
+  background-color: var(--navbar-hover-color) !important;
+}
+
+.artist-menu-item.active {
+  background-color: var(--navbar-active-color) !important;
+}
+
+/* Navbar.css - для специфичных стилей компонента */
+.custom-navbar .MuiToolbar-root {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .custom-navbar .MuiTypography-h6 {
+    font-size: 1rem;
+  }
+  
+  .custom-navbar .MuiButton-root {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+  }
+  
+  .custom-navbar .MuiIconButton-root {
+    padding: 6px;
+  }
+}
+
+
+
 /* минус бордеры */
 /* Удаление всех возможных границ */
 *, *::before {
   border-color: transparent !important;
+  border-radius: 0 !important;
 }
 
 /* ArtistMenu стили */
@@ -52,19 +142,30 @@
 .popup-auth-container .MuiDialog-paper {
   max-height: calc(100vh - 64px) !important;
   overflow: hidden !important;
-  border: none !important;
-  background-color: var(--mui-palette-background-paper);
+  
+  background-color: black;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 30px;
+
 }
 
 .popup-auth-content {
   padding: 16px;
   overflow: hidden !important;
 }
-
+.popup-auth-content input {
+  border-bottom: 1px solid white !important;
+}
 .popup-auth-content-inner {
   max-height: calc(100vh - 200px);
   overflow-y: auto;
   overflow-x: hidden;
+  display: flex;
+  margin: 0;
+  flex-direction:column;
+  gap:50px;
 }
 
 .popup-auth-content-inner::-webkit-scrollbar {
@@ -76,6 +177,11 @@
   border-bottom: 1px solid var(--mui-palette-divider);
 }
 
+.popup-auth-button{
+  
+  margin-top: 50px !important;
+  width: 100% !important;
+}
 .popup-auth-close-btn {
   position: absolute !important;
   right: 8px !important;
@@ -84,12 +190,15 @@
 
 .popup-auth-form {
   display: flex;
+  margin: 0;
+  width: 100% !important;
   flex-direction: column;
   gap: 16px;
 }
 
 .popup-auth-actions {
   padding: 0 !important;
+  width: 100% !important;
   margin-top: 16px;
 }
 
@@ -98,70 +207,138 @@
   margin-top: 16px;
 }
 
+/* artistpage */
 
-/* ArtistPage стили */
+/* Основной контейнер */
 .artist-page-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 24px;
+  position: relative;
 }
 
-.artist-header {
-  text-align: center;
-  margin-bottom: 32px;
-  color: black;
-}
-
-.artist-title {
-  font-size: 2.5rem;
-  margin-bottom: 8px;
-  
-}
-
-.artist-category {
-  color: var(--mui-palette-text-secondary);
-  font-size: 1.2rem;
-}
-
-.artist-description {
-  max-width: 800px;
-  margin: 0 auto 32px;
-  text-align: center;
-  line-height: 1.6;
-}
-
+/* Контейнер для изображения */
 .artist-image-container {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 40px;
+  position: relative;
+  width: 100%;
+  height: 800px; /* Фиксированная высота */
+  overflow: hidden;
 }
 
-.artist-image {
-  max-width: 100%;
-  max-height: 500px;
-  border-radius: 8px;
+.artist-hero-image {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
 .artist-image-placeholder {
   width: 100%;
-  height: 500px;
-  background-color: white;
-  border-radius: 8px;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: black;
+  background-color: #333;
+  color: white;
+}
+
+/* Наложенный контент (название и описание) */
+
+.artist-content-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 800px;
+  display: flex;
+  align-items: center;
+  padding-top: 100px;
+  padding-bottom: 100px;
+  background: linear-gradient(to top, rgb(0, 0, 0) 0%, transparent 80%);
+  z-index: 2;
+}
+
+
+.artist-header {
+  width: 100%;
+  max-width: 95vw;
+  margin: 0 auto;
+  padding: 0 24px 40px; 
+  color: white;
+}
+
+.artist-title {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.artist-description {
+  font-size: 1.2rem;
+  max-width: 800px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+/* Секция альбомов (наезжает на изображение) */
+.albums-section-wrapper {
+  position: relative;
+  z-index: 3;
+  margin-top: -400px; 
+  padding-bottom: 60px;
+}
+
+
+.filter-section{
+
 }
 
 .albums-section {
-  margin-top: 40px;
+  
+  margin: 0 auto;
+  padding: 60px 24px; 
+
+  position: relative;
+
+  max-width: 95vw;
+  margin: 0 auto;
+  
 }
+
+.albums-section::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(
+    to bottom, 
+    transparent 0%, 
+    var(--mui-palette-background-default) 100%
+  );
+  pointer-events: none;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .artist-image-container,
+  .artist-content-overlay {
+    height: 400px;
+  }
+  
+  .artist-title {
+    font-size: 2rem;
+  }
+  
+  .albums-section-wrapper {
+    margin-top: -80px;
+  }
+}
+ 
+
+
 
 .albums-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 24px;
+      row-gap: 60px;
+    column-gap: 45px;
   margin-top: 24px;
 }
 
@@ -171,7 +348,7 @@
   overflow: hidden;
   transition: transform 0.3s ease;
   height: 100%;
-  display: flex;
+  /* display: flex; */
   flex-direction: column;
 }
 
@@ -190,7 +367,8 @@
 .album-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: cover; 
+  transition: transform 0.3s ease;
 }
 
 .album-image-placeholder {
@@ -204,7 +382,7 @@
 }
 
 .album-info {
-  padding: 16px;
+  padding-top: 16px;
   flex-grow: 1;
   display: flex;
   flex-direction: column;
@@ -212,13 +390,26 @@
 }
 
 .album-title {
-  font-size: 1.2rem;
-  margin-bottom: 8px;
+  font-size: 1rem; /* Уменьшенный размер */
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* Ограничиваем в 2 строки */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .album-date {
+  font-size: 0.8rem;
   color: var(--mui-palette-text-secondary);
+  margin-bottom: 4px;
+}
+
+.album-price {
   font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--mui-palette-primary-main);
 }
 
 .no-albums {
@@ -252,14 +443,6 @@
 }
 
 /* Artist Header стили */
-.artist-hero {
-  position: relative;
-  width: 100%;
-  height: 500px;
-  margin-bottom: 40px;
-  border-radius: 8px;
-  overflow: hidden;
-}
 
 .artist-hero-image {
   width: 100%;
@@ -296,6 +479,7 @@
   max-width: 800px;
   text-shadow: 0 2px 4px rgba(0,0,0,0.5);
 }
+
 
 
   /* страница альбома  */

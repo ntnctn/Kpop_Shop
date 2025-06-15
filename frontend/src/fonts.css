@@ -1,0 +1,22 @@
+@font-face {
+  font-family: 'DrukText-Medium';
+  src: url('C:\Users\katy\Documents\GitHub\Kpop_Shop\frontend\public\fonts\DrukText-Medium.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'GraphikLCG-Medium';
+  src: url('C:\Users\katy\Documents\GitHub\Kpop_Shop\frontend\public\fonts\GraphikLCG-Medium.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'GraphikLCG-Regular';
+  src: url('C:\Users\katy\Documents\GitHub\Kpop_Shop\frontend\public\fonts\GraphikLCG-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}

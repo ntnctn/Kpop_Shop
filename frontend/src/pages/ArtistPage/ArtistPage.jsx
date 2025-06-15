@@ -9,9 +9,12 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel,
-  Button
+  InputLabel
 } from '@mui/material';
+
+import SortOutlinedIcon from '@mui/icons-material/SortOutlined';
+
+import './ArtistPage.css';
 
 const ArtistPage = () => {
   const { id } = useParams();
@@ -20,9 +23,6 @@ const ArtistPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [sortBy, setSortBy] = useState('release_date_desc');
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // Загрузка данных артиста
   const fetchArtistData = useCallback(async () => {
@@ -41,44 +41,34 @@ const ArtistPage = () => {
     }
   }, [id]);
 
-  // Загрузка альбомов с пагинацией и сортировкой
-  const fetchAlbums = useCallback(async (pageNum = 1, sortOption = sortBy, shouldReset = false) => {
+  // Загрузка всех альбомов с сортировкой
+  const fetchAlbums = useCallback(async (sortOption = sortBy) => {
     try {
-      setIsLoadingMore(true);
-      
+      setLoading(true);
+
       const params = {
-        page: pageNum,
-        sort: sortOption,
-        limit: 10
+        sort: sortOption
       };
 
       const response = await api.getArtistAlbums(id, params);
       const receivedAlbums = response.data.albums || response.data || [];
-
-      if (shouldReset || pageNum === 1) {
-        setAlbums(response.data.albums || []);
-      } else {
-        setAlbums(prev => [...prev, ...(response.data.albums || [])]);
-      }
-
-      setHasMore((response.data.albums || []).length >= 10);
+      setAlbums(receivedAlbums);
     } catch (err) {
       setError(err.message || 'Ошибка загрузки альбомов');
     } finally {
-      setIsLoadingMore(false);
       setLoading(false);
     }
   }, [id, sortBy]);
 
   // Первоначальная загрузка данных
- useEffect(() => {
+  useEffect(() => {
     const loadInitialData = async () => {
       setLoading(true);
       try {
         // Загружаем данные артиста и альбомы параллельно
         await Promise.all([
           fetchArtistData(),
-          fetchAlbums(1, sortBy, true)
+          fetchAlbums(sortBy)
         ]);
       } catch (err) {
         setError(err.message || 'Ошибка загрузки данных');
@@ -91,36 +81,8 @@ const ArtistPage = () => {
   const handleSortChange = (event) => {
     const newSort = event.target.value;
     setSortBy(newSort);
-    setPage(1);
-    fetchAlbums(1, newSort, true);
+    fetchAlbums(newSort);
   };
-
-  // Загрузка дополнительных альбомов
-  const loadMoreAlbums = () => {
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchAlbums(nextPage);
-  };
-
-  // Обработчик бесконечного скролла
-  const handleScroll = useCallback(() => {
-    if (isLoadingMore || !hasMore) return;
-    
-    const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
-    if (scrollTop + clientHeight >= scrollHeight - 100) {
-      loadMoreAlbums();
-    }
-  }, [isLoadingMore, hasMore]);
-
-  useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
-//отладка
-  useEffect(() => {
-    console.log('Artist data:', artist);
-    console.log('Albums data:', albums);
-  }, [artist, albums]);
 
   // Получение названия категории
   const getCategoryName = (category) => {
@@ -157,71 +119,73 @@ const ArtistPage = () => {
   }
 
   return (
-     <div className="artist-page-container">
-      {/* Секция с артистом  */}
-      <div className="artist-hero">
+    <div className="artist-page-container">
+      {/* Контейнер для изображения артиста */}
+      <div className="artist-image-container">
         {artist.image_url ? (
-          <img 
-            src={artist.image_url} 
+          <img
+            src={artist.image_url}
             alt={artist.name}
             className="artist-hero-image"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.nextSibling.style.display = 'flex';
-            }}
           />
         ) : (
-          <div className="artist-image-placeholder" style={{ height: '100%' }}>
+          <div className="artist-image-placeholder">
             <Typography variant="h2">{artist.name}</Typography>
           </div>
         )}
-        
-        <div className="artist-hero-content">
-          <div className="artist-hero-name">
-<Typography variant="h1" className="artist-hero-title" >
+      </div>
+
+      {/* Контент, который накладывается на изображение */}
+      <div className="artist-content-overlay">
+        <div className="artist-header">
+          <Typography variant="h1" className="artist-title">
             {artist.name}
           </Typography>
-          
-          
           {artist.description && (
-            <Typography className="artist-hero-description">
+            <Typography className="artist-description">
               {artist.description}
             </Typography>
           )}
-          </div>
-          
         </div>
       </div>
 
-      <div className="albums-section">
-        <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Typography variant="h2" className="artist-title">Альбомы</Typography>
-          <FormControl className="filter-section" size="small">
-            <InputLabel id="sort-label">Сортировка</InputLabel>
-            <Select
-              labelId="sort-label"
-              value={sortBy}
-              onChange={handleSortChange}
-              className="filter-select"
-              label="Сортировка"
-            >
-              <MenuItem value="release_date_desc">По дате (новые)</MenuItem>
-              <MenuItem value="release_date_asc">По дате (старые)</MenuItem>
-              <MenuItem value="price_asc">По цене (дешевые)</MenuItem>
-              <MenuItem value="price_desc">По цене (дорогие)</MenuItem>
-              <MenuItem value="title_asc">По названию (А-Я)</MenuItem>
-              <MenuItem value="title_desc">По названию (Я-А)</MenuItem>
-            </Select>
-          </FormControl>
-        </Box>
-        
-        {albums && albums.length > 0 ? (
-          <>
+      {/* Секция с альбомами (наезжает на изображение) */}
+      <div className="albums-section-wrapper">
+        <div className="albums-section">
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <SortOutlinedIcon fontSize="small" sx={{ color: 'text.secondary', mr: 1 }} />
+            <Typography  variant="body1" sx={{ color: 'text.secondary' }}>
+                сортировка
+            </Typography>
+            <FormControl className="filter-section" size="small">
+              <InputLabel id="sort-label" ></InputLabel>
+              <Select
+                labelId="sort-label"
+                value={sortBy}
+                onChange={handleSortChange}
+                sx={{paddingLeft: '250px'}}
+                className="filter-select"
+              >
+                <MenuItem value="release_date_desc">по дате (новые)</MenuItem>
+                <MenuItem value="release_date_asc">по дате (старые)</MenuItem>
+                <MenuItem value="price_asc">по возрастанию цены</MenuItem>
+                <MenuItem value="price_desc">по убыванию цены</MenuItem>
+                <MenuItem value="title_asc">по названию (А-Я)</MenuItem>
+                <MenuItem value="title_desc">по названию (Я-А)</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          {loading ? (
+            <Box display="flex" justifyContent="center">
+              <CircularProgress />
+            </Box>
+          ) : albums && albums.length > 0 ? (
             <div className="albums-grid">
               {albums.map(album => (
-                <Link 
-                  to={`/album/${album.id}`} 
-                  key={album.id} 
+                <Link
+                  to={`/album/${album.id}`}
+                  key={album.id}
                   className="album-card-link"
                   style={{ textDecoration: 'none' }}
                 >
@@ -249,40 +213,24 @@ const ArtistPage = () => {
                       )}
                     </div>
                     <div className="album-info">
-                      <Typography variant="h3" className="album-title">{album.title}</Typography>
-                      <Typography className="album-date">
+                      <Typography variant="albumDate" className="album-date">
                         {new Date(album.release_date).toLocaleDateString()}
                       </Typography>
-                      <Typography className="album-price">
-                        От {album.base_price} ₽
+
+                      <Typography variant="albumTitle" className="album-title">{album.title}</Typography>
+
+                      <Typography variant="albumPrice" className="album-price">
+                        от {album.base_price} ₽
                       </Typography>
                     </div>
                   </div>
                 </Link>
               ))}
             </div>
-
-            {isLoadingMore && (
-              <div className="loading-indicator">
-                <CircularProgress />
-              </div>
-            )}
-
-            {!isLoadingMore && hasMore && (
-              <div className="load-more-container">
-                <Button 
-                  variant="contained" 
-                  onClick={loadMoreAlbums}
-                  disabled={isLoadingMore}
-                >
-                  Показать еще
-                </Button>
-              </div>
-            )}
-          </>
-        ) : (
-          <Typography className="no-albums">У исполнителя пока нет альбомов</Typography>
-        )}
+          ) : (
+            <Typography className="no-albums">У исполнителя пока нет альбомов</Typography>
+          )}
+        </div>
       </div>
     </div>
   );

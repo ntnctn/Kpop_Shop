@@ -96,7 +96,7 @@ const PopupAuth = ({ onClose, onLogin }) => {
             <TextField
               required
               fullWidth
-              label="Email"
+              label="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -105,7 +105,7 @@ const PopupAuth = ({ onClose, onLogin }) => {
             <TextField
               required
               fullWidth
-              label="Пароль"
+              label="пароль"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -114,6 +114,7 @@ const PopupAuth = ({ onClose, onLogin }) => {
 
             <Box className="popup-auth-actions">
               <Button 
+                className="popup-auth-button"
                 type="submit" 
                 fullWidth 
                 variant="contained"
@@ -126,10 +127,11 @@ const PopupAuth = ({ onClose, onLogin }) => {
           <Typography variant="body2" className="popup-auth-toggle">
             {isRegistering ? 'Уже есть аккаунт? ' : 'Нет аккаунта? '}
             <Button 
+            // className="popup-auth-button"
               color="primary" 
               size="small" 
               onClick={toggleAuthMode}
-              sx={{ textTransform: 'none' }}
+              sx={{ textTransform: 'none'  }}
             >
               {isRegistering ? 'Войти' : 'Зарегистрироваться'}
             </Button>
