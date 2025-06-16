@@ -52,7 +52,7 @@
 
 /* Artist Menu стили (дополнение к существующим) */
 .artist-menu-container {
-  background-color: var(--mui-palette-background-paper) !important;
+  /* background-color: var(--mui-palette-background-paper) !important; */
 }
 
 .artist-menu-item:hover {
@@ -104,7 +104,12 @@
   background-color: var(--mui-palette-background-paper);
   z-index: 1300;
   overflow: hidden;
-  box-shadow: 24px 0 24px -24px rgba(0, 0, 0, 0.5);
+  box-shadow: 
+  20px 0px 100px 20px rgb(121 121 121 / 21%), 
+  -20px -4px 100px 4px rgba(221, 221, 221, 0.35), 
+  0px 0px 100px 4px rgb(75 75 75 / 0%);
+  
+  background-color: black !important;
   border: none !important; /* Убираем все возможные границы */
 }
 
@@ -139,7 +144,7 @@
 
 
 /* PopupAuth стили */
-.popup-auth-container .MuiDialog-paper {
+.popup-auth-container .MuiDialog-paper, .modal .MuiDialog-paper{
   max-height: calc(100vh - 64px) !important;
   overflow: hidden !important;
   
@@ -149,15 +154,83 @@
   flex-wrap: nowrap;
   gap: 30px;
 
+  box-shadow: 
+  20px 0px 100px 20px rgb(121 121 121 / 21%),
+  20px 0px 100px 20px rgb(121 121 121 / 21%), 
+  -20px -4px 100px 4px rgba(221, 221, 221, 0.35), 
+  0px 0px 100px 4px rgb(75 75 75 / 0%) !important;
+
+}
+
+.catalog-search{
+  border-bottom: 1px solid white !important;
 }
 
 .popup-auth-content {
   padding: 16px;
   overflow: hidden !important;
 }
-.popup-auth-content input {
+
+.MuiTableCell-root, .MuiTableCell-head{
+   border: 0.01px solid rgba(255, 255, 255, 0.504) !important;
+}
+
+
+.MuiDataGrid-cell, .MuiDataGrid-columnHeader, .MuiDataGrid-mainContent, .MuiTablePagination-root, .MuiDataGrid-filler{
+
+  border: 0.01px solid rgba(255, 255, 255, 0.504) !important;
+}
+.admin-panel{
+  border-top: 0.01px solid rgba(255, 255, 255, 0.504) !important;
+}
+
+.admin-menu{
+  border-right: 0.01px solid rgba(255, 255, 255, 0.504) !important;
+}
+
+
+
+
+.popup-auth-content input, .modal input, .modal .MuiSelect-select, .modal textarea, .modal-select {
   border-bottom: 1px solid white !important;
 }
+.modal .modal-button-delete{
+  margin-left: 30px;
+}
+.modal button{
+  border: 1px solid white !important;
+}
+.modal .button-close{
+  /* border: 1px solid white !important; */
+}
+.modal-version-container{
+border: 1px solid white !important;
+width: 100%;
+}
+
+/* Стили для модального окна */
+.custom-modal .modal-content {
+  padding: 0;
+  overflow: hidden;
+}
+
+.custom-modal .modal-content-wrapper {
+  padding: 16px;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+}
+
+/* Стили для формы */
+.album-form {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-version-container {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
 .popup-auth-content-inner {
   max-height: calc(100vh - 200px);
   overflow-y: auto;

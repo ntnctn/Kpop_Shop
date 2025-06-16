@@ -4,10 +4,23 @@ import CloseIcon from '@mui/icons-material/Close';
 
 export const Modal = ({ open, onClose, title, children }) => {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
+    <Dialog 
+      className="modal"
+      open={open} 
+      onClose={onClose} 
+      maxWidth="md" 
+      fullWidth
+      sx={{
+        '& .MuiDialog-paper': {
+          maxHeight: 'calc(100vh - 64px)',
+          overflow: 'hidden',
+        }
+      }}
+    >
+      <DialogTitle className="modal-title">
         {title}
         <IconButton
+        className="button-close"
           aria-label="close"
           onClick={onClose}
           sx={{
@@ -20,8 +33,10 @@ export const Modal = ({ open, onClose, title, children }) => {
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <DialogContent dividers>
-        {children}
+      <DialogContent dividers className="modal-content">
+        <div className="modal-content-wrapper">
+          {children}
+        </div>
       </DialogContent>
     </Dialog>
   );

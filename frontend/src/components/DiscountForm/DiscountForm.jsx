@@ -60,7 +60,7 @@ export const DiscountForm = ({
       title={initialData?.id ? 'Редактирование скидки' : 'Добавление новой скидки'}
     >
       <form onSubmit={handleSubmit}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
           <TextField
             label="Название скидки*"
             name="name"

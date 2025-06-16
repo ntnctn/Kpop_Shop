@@ -23,6 +23,8 @@ import {
   AdminPanelSettingsOutlined as AdminIcon
 } from '@mui/icons-material';
 
+import SearchIcon from '@mui/icons-material/Search';
+
 const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [menuPreloaded, setMenuPreloaded] = useState(false);
@@ -75,10 +77,7 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
             <HomeIcon />
           </IconButton> */}
 
-          {/* Иконка каталога */}
-          <IconButton component={Link} to="/catalog" color="inherit" sx={{ mr: 1 }}>
-            <AlbumIcon />
-          </IconButton>
+          
         </Box>
 
         {/* Логотип текстом */}
@@ -94,6 +93,11 @@ const Navbar = ({ currentUser, onAuthClick, onLogout, cartItemCount = 0 }) => {
         >
           MagicShop
         </Typography>
+
+        {/* Иконка каталога */}
+          <IconButton component={Link} to="/catalog" color="inherit" sx={{ mr: 1 }}>
+            <SearchIcon />
+          </IconButton>
 
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           {/* Иконка корзины с бейджем */}

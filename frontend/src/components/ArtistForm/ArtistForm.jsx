@@ -28,7 +28,7 @@ export const ArtistForm = ({
 
   return (
     <form onSubmit={handleSubmit}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, width: '100%'}}>
         <TextField
           label="Название группы/артиста*"
           value={artistData.name}

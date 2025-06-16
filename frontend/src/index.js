@@ -117,6 +117,15 @@ const darkTheme = createTheme({
         },
       },
     },
+
+     MuiBackdrop: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(3px)',
+        }
+      }
+    },
   },
 });
 

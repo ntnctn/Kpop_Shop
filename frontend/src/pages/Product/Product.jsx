@@ -58,7 +58,6 @@ const Product = () => {
     setImageLoading(true);
   }, [selectedVersion, album]);
 
-
   const handleAddToCart = async () => {
     if (!album || !album.versions) return;
 
@@ -90,8 +89,6 @@ const Product = () => {
       });
     }
   };
-
-
 
   const handleImageError = (e) => {
     e.target.style.display = 'none';
@@ -194,18 +191,37 @@ const Product = () => {
           )}
 
           {currentImage ? (
-            <img
-              src={currentImage}
-              alt={album.title}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: imageLoading ? 'none' : 'block'
-              }}
-              onLoad={handleImageLoad}
-              onError={handleImageError}
-            />
+            <>
+              <img
+                src={currentImage}
+                alt={album.title}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  display: imageLoading ? 'none' : 'block'
+                }}
+                onLoad={handleImageLoad}
+                onError={handleImageError}
+              />
+              {/* Маленькая плашка со скидкой */}
+              {maxDiscount > 0 && (
+                <Box sx={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  backgroundColor: 'error.main',
+                  color: 'white',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  fontSize: '0.875rem',
+                  fontWeight: 'bold',
+                  zIndex: 1
+                }}>
+                  -{maxDiscount}%
+                </Box>
+              )}
+            </>
           ) : null}
 
           <Box sx={{
@@ -241,14 +257,14 @@ const Product = () => {
           {/* Discounts section */}
           {activeDiscounts.length > 0 && (
             <Box sx={{
-              backgroundColor: 'warning.light',
-              borderRadius: 1,
+              backgroundColor: '#a59fbd',
+              borderRadius: 0,
               p: 2,
               mb: 3
             }}>
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
+              {/* <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
                 🎉 Акционные предложения
-              </Typography>
+              </Typography> */}
 
               {activeDiscounts.map((discount) => (
                 <Box key={discount.id} sx={{ mb: 1.5 }}>
@@ -430,7 +446,6 @@ const Product = () => {
         message={snackbar.message}
       />
     </Container>
-
   );
 };
 
